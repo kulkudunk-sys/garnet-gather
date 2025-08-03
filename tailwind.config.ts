@@ -52,15 +52,21 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
-				sidebar: {
-					DEFAULT: 'hsl(var(--sidebar-background))',
-					foreground: 'hsl(var(--sidebar-foreground))',
-					primary: 'hsl(var(--sidebar-primary))',
-					'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-					accent: 'hsl(var(--sidebar-accent))',
-					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-					border: 'hsl(var(--sidebar-border))',
-					ring: 'hsl(var(--sidebar-ring))'
+				/* Discord-specific colors */
+				discord: {
+					'server-bg': 'hsl(var(--server-bg))',
+					'server-hover': 'hsl(var(--server-hover))',
+					'server-active': 'hsl(var(--server-active))',
+					'channel-bg': 'hsl(var(--channel-bg))',
+					'channel-hover': 'hsl(var(--channel-hover))',
+					'channel-text': 'hsl(var(--channel-text))',
+					'chat-bg': 'hsl(var(--chat-bg))',
+					'chat-input': 'hsl(var(--chat-input))',
+					'message-hover': 'hsl(var(--message-hover))',
+					'online': 'hsl(var(--online))',
+					'away': 'hsl(var(--away))',
+					'busy': 'hsl(var(--busy))',
+					'offline': 'hsl(var(--offline))'
 				}
 			},
 			borderRadius: {
