@@ -94,29 +94,35 @@ async function handleServers(req: Request, supabaseClient: any, userId: string) 
     // Создать новый сервер
     const { name, description } = await req.json()
     
-    // Создаем сервер
+    // Создаем сервер с правильным owner_id для RLS
     const { data: server, error: serverError } = await supabaseClient
       .from('servers')
       .insert({
         name,
         description,
-        owner_id: userId
+        owner_id: userId  // используем userId который соответствует auth.uid()
       })
       .select()
       .single()
     
-    if (serverError) throw serverError
+    if (serverError) {
+      console.error('Server creation error:', serverError)
+      throw serverError
+    }
     
-    // Добавляем создателя как владельца
+    // Добавляем создателя как владельца в server_members
     const { error: memberError } = await supabaseClient
       .from('server_members')
       .insert({
         server_id: server.id,
         user_id: userId,
-        role: 'owner'
+        role: 'admin'  // изменено с 'owner' на 'admin'
       })
     
-    if (memberError) throw memberError
+    if (memberError) {
+      console.error('Member creation error:', memberError)
+      throw memberError
+    }
     
     // Создаем базовые каналы
     const { error: channelError } = await supabaseClient
