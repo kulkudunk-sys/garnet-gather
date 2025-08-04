@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useState, useEffect } from "react";
 import { useRealtimeMessages } from "@/hooks/useRealtime";
 import { api } from "@/lib/api";
-import { VoiceChat } from "./VoiceChat";
+import { VoiceChannelInterface } from "./VoiceChannelInterface";
 
 interface ChatAreaProps {
   channelId: string | null;
@@ -47,7 +47,7 @@ export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps)
 
   if (channelType === "voice") {
     return (
-      <VoiceChat 
+      <VoiceChannelInterface 
         channelId={channelId || ""}
         channelName={channelName}
       />

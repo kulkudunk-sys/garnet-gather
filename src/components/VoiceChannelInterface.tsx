@@ -1,0 +1,164 @@
+import { Volume2, VolumeX, Mic, MicOff, Phone, PhoneOff, Users } from "lucide-react";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { useVoiceChannel } from "@/hooks/useVoiceChannel";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+
+interface VoiceChannelInterfaceProps {
+  channelId: string;
+  channelName: string;
+  onClose?: () => void;
+}
+
+export const VoiceChannelInterface = ({ channelId, channelName, onClose }: VoiceChannelInterfaceProps) => {
+  const {
+    isConnected,
+    isRecording,
+    isMuted,
+    connectedUsers,
+    connectToVoiceChannel,
+    disconnectFromVoiceChannel,
+    toggleMute
+  } = useVoiceChannel(channelId);
+
+  const handleConnect = () => {
+    if (isConnected) {
+      disconnectFromVoiceChannel();
+    } else {
+      connectToVoiceChannel();
+    }
+  };
+
+  return (
+    <div className="flex-1 bg-discord-chat-bg flex flex-col">
+      {/* Header */}
+      <div className="p-4 border-b border-accent/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Volume2 className="w-6 h-6 text-foreground" />
+            <div>
+              <h1 className="text-xl font-semibold text-foreground">{channelName}</h1>
+              <p className="text-sm text-muted-foreground">
+                {isConnected ? `${connectedUsers.length} участников в канале` : "Голосовой канал"}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Badge variant={isConnected ? "default" : "secondary"}>
+              {isConnected ? "Подключен" : "Не подключен"}
+            </Badge>
+            {onClose && (
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                Закрыть
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Voice Controls */}
+      <div className="p-4 border-b border-accent/20">
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            variant={isConnected ? "destructive" : "default"}
+            size="lg"
+            onClick={handleConnect}
+            className="gap-2"
+          >
+            {isConnected ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+            {isConnected ? "Отключиться" : "Подключиться"}
+          </Button>
+          
+          {isConnected && (
+            <Button
+              variant={isMuted ? "destructive" : "secondary"}
+              size="lg"
+              onClick={toggleMute}
+              className="gap-2"
+            >
+              {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isMuted ? "Включить микрофон" : "Выключить микрофон"}
+            </Button>
+          )}
+        </div>
+        
+        {/* Status Indicators */}
+        <div className="flex justify-center gap-4 mt-4">
+          {isRecording && !isMuted && (
+            <Badge variant="default" className="animate-pulse">
+              🎤 Микрофон активен
+            </Badge>
+          )}
+          {isMuted && (
+            <Badge variant="destructive">
+              🔇 Микрофон выключен
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Connected Users */}
+      <div className="flex-1 overflow-auto p-4">
+        {connectedUsers.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">
+            <Volume2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <p>Никого нет в голосовом канале</p>
+            <p className="text-sm mt-2">Подключитесь, чтобы начать разговор</p>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Участники голосового канала ({connectedUsers.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {connectedUsers.map((user) => (
+                <div
+                  key={user.user_id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50"
+                >
+                  <div className="relative">
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {user.username.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    {user.isSpeaking && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-background rounded-full animate-pulse" />
+                    )}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="font-medium text-foreground">{user.username}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {user.isMuted ? "Микрофон выключен" : "В голосовом канале"}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    {user.isMuted ? (
+                      <MicOff className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <Mic className="w-4 h-4 text-green-500" />
+                    )}
+                    {user.isSpeaking && (
+                      <div className="flex gap-1">
+                        <div className="w-1 h-4 bg-green-500 rounded animate-pulse" />
+                        <div className="w-1 h-3 bg-green-500 rounded animate-pulse delay-75" />
+                        <div className="w-1 h-2 bg-green-500 rounded animate-pulse delay-150" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};
