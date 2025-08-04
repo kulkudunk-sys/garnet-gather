@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { CreateServerDialog } from "./CreateServerDialog";
 
 interface ServerSidebarProps {
   activeServer: string;
@@ -12,6 +13,7 @@ interface ServerSidebarProps {
 export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarProps) => {
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     const loadServers = async () => {
@@ -31,6 +33,11 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
 
     loadServers();
   }, []);
+
+  const handleServerCreated = (newServer: any) => {
+    setServers(prevServers => [...prevServers, newServer]);
+    onServerChange(newServer.id);
+  };
 
   return (
     <div className="w-18 bg-discord-server-bg flex flex-col items-center py-3 space-y-2">
@@ -91,6 +98,7 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
           variant="ghost"
           size="icon"
           className="w-12 h-12 rounded-2xl bg-discord-channel-bg hover:bg-discord-server-hover hover:rounded-xl transition-all duration-200 text-discord-channel-text hover:text-foreground"
+          onClick={() => setCreateDialogOpen(true)}
         >
           <Plus className="h-6 w-6" />
         </Button>
@@ -99,6 +107,12 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
           Добавить сервер
         </div>
       </div>
+      
+      <CreateServerDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onServerCreated={handleServerCreated}
+      />
     </div>
   );
 };

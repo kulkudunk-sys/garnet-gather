@@ -15,6 +15,22 @@ interface ChatAreaProps {
 export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
   const { messages, setMessages } = useRealtimeMessages(channelId);
+  
+  // Загружаем начальные сообщения при смене канала
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (channelId) {
+        try {
+          const initialMessages = await api.getMessages(channelId);
+          setMessages(initialMessages);
+        } catch (error) {
+          console.error("Ошибка загрузки сообщений:", error);
+        }
+      }
+    };
+    
+    loadMessages();
+  }, [channelId, setMessages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
