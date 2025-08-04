@@ -75,7 +75,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     return pc;
   }, [localStream]);
 
-  // Подключение к голосовому каналу
+  // Автоматическое подключение к голосовому каналу при изменении channelId
   const connectToVoiceChannel = useCallback(async () => {
     if (!channelId) return;
 
@@ -308,6 +308,15 @@ export const useVoiceChannel = (channelId: string | null) => {
       initiateConnections();
     }
   }, [isConnected, connectedUsers, initiateConnections]);
+
+  // Автоматическое подключение при изменении channelId
+  useEffect(() => {
+    if (channelId) {
+      connectToVoiceChannel();
+    } else {
+      disconnectFromVoiceChannel();
+    }
+  }, [channelId, connectToVoiceChannel, disconnectFromVoiceChannel]);
 
   // Очистка при размонтировании
   useEffect(() => {

@@ -19,17 +19,13 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
     isRecording,
     isMuted,
     connectedUsers,
-    connectToVoiceChannel,
     disconnectFromVoiceChannel,
     toggleMute
   } = useVoiceChannel(channelId);
 
-  const handleConnect = () => {
-    if (isConnected) {
-      disconnectFromVoiceChannel();
-    } else {
-      connectToVoiceChannel();
-    }
+  const handleDisconnect = () => {
+    disconnectFromVoiceChannel();
+    onClose?.();
   };
 
   return (
@@ -66,30 +62,31 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
       <div className="p-4 border-b border-accent/20">
         <div className="flex items-center justify-center gap-4">
           <Button
-            variant={isConnected ? "destructive" : "default"}
+            variant="destructive"
             size="lg"
-            onClick={handleConnect}
+            onClick={handleDisconnect}
             className="gap-2"
           >
-            {isConnected ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-            {isConnected ? "Отключиться" : "Подключиться"}
+            <PhoneOff className="w-4 h-4" />
+            Покинуть канал
           </Button>
           
-          {isConnected && (
-            <Button
-              variant={isMuted ? "destructive" : "secondary"}
-              size="lg"
-              onClick={toggleMute}
-              className="gap-2"
-            >
-              {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              {isMuted ? "Включить микрофон" : "Выключить микрофон"}
-            </Button>
-          )}
+          <Button
+            variant={isMuted ? "destructive" : "secondary"}
+            size="lg"
+            onClick={toggleMute}
+            className="gap-2"
+          >
+            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isMuted ? "Включить микрофон" : "Выключить микрофон"}
+          </Button>
         </div>
         
         {/* Status Indicators */}
         <div className="flex justify-center gap-4 mt-4">
+          <Badge variant="default" className="animate-pulse">
+            🔊 Подключен к голосовому каналу
+          </Badge>
           {isRecording && !isMuted && (
             <Badge variant="default" className="animate-pulse">
               🎤 Микрофон активен
@@ -105,16 +102,10 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
 
       {/* Connected Users */}
       <div className="flex-1 overflow-auto p-4">
-        {!isConnected ? (
+        {connectedUsers.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             <Volume2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p>Подключитесь к голосовому каналу</p>
-            <p className="text-sm mt-2">Нажмите "Подключиться", чтобы начать разговор</p>
-          </div>
-        ) : connectedUsers.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
-            <Volume2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p>Вы подключены к голосовому каналу</p>
+            <p>Подключение к голосовому каналу...</p>
             <p className="text-sm mt-2">Ожидание других участников...</p>
           </div>
         ) : (
