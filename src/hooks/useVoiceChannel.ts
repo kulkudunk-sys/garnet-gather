@@ -20,10 +20,69 @@ export const useVoiceChannel = (channelId: string | null) => {
   const [isMuted, setIsMuted] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<VoiceUser[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const voicePresenceRef = useRef<RealtimeChannel | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const analyserRef = useRef<AnalyserNode | null>(null);
+
+  // Voice Activity Detection
+  const setupVoiceActivityDetection = useCallback((stream: MediaStream, audioContext: AudioContext) => {
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 1024;
+    microphone.connect(analyser);
+    
+    analyserRef.current = analyser;
+    
+    const detectVoiceActivity = () => {
+      if (!analyserRef.current) return;
+      
+      analyserRef.current.getByteFrequencyData(dataArray);
+      const volume = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+      
+      const speaking = volume > 20; // Threshold for speaking detection
+      
+      if (speaking !== isSpeaking) {
+        setIsSpeaking(speaking);
+        updateVoicePresence(speaking);
+      }
+      
+      requestAnimationFrame(detectVoiceActivity);
+    };
+    
+    detectVoiceActivity();
+  }, [isSpeaking]);
+
+  // Обновление presence с информацией о речи
+  const updateVoicePresence = useCallback(async (speaking: boolean) => {
+    if (!voicePresenceRef.current || !channelId) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, display_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+      
+      await voicePresenceRef.current.track({
+        user_id: user.id,
+        username: username,
+        channel_id: channelId,
+        isMuted: isMuted,
+        isSpeaking: speaking,
+        joined_at: new Date().toISOString()
+      });
+    }
+  }, [channelId, isMuted]);
 
   // Создание RTCPeerConnection для пользователя
   const createPeerConnection = useCallback(async (userId: string): Promise<RTCPeerConnection> => {
@@ -82,17 +141,35 @@ export const useVoiceChannel = (channelId: string | null) => {
     try {
       console.log('Connecting to voice channel:', channelId);
       
-      // Получаем доступ к микрофону
+      // Создаем общий presence канал для отображения в sidebar
+      const serverId = channelId.split('_')[0]; // Извлекаем server ID из channel ID
+      const voicePresence = supabase.channel(`voice_channels_${serverId}`, {
+        config: {
+          presence: {
+            key: 'user_id'
+          }
+        }
+      });
+      voicePresenceRef.current = voicePresence;
+      
+      await voicePresence.subscribe();
+      
+      // Получаем доступ к микрофону и настраиваем VAD
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          sampleRate: 48000
         }
       });
       
       setLocalStream(stream);
       setIsRecording(true);
+      
+      // Настраиваем Voice Activity Detection
+      const audioContext = new AudioContext();
+      setupVoiceActivityDetection(stream, audioContext);
 
       // Создаем канал для сигналинга
       const channel = supabase.channel(`voice_channel_${channelId}`)
@@ -199,6 +276,9 @@ export const useVoiceChannel = (channelId: string | null) => {
               
               console.log('Track result:', trackResult);
               setIsConnected(true);
+              
+              // Также отправляем в общий presence канал
+              await updateVoicePresence(false);
             }
           } else if (status === 'CHANNEL_ERROR') {
             console.error('Channel error occurred');
@@ -213,7 +293,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     } catch (error) {
       console.error('Error connecting to voice channel:', error);
     }
-  }, [channelId, isMuted]); // Убираем createPeerConnection из зависимостей
+  }, [channelId, isMuted, setupVoiceActivityDetection, updateVoicePresence]);
 
   // Отключение от голосового канала
   const disconnectFromVoiceChannel = useCallback(() => {
@@ -233,15 +313,21 @@ export const useVoiceChannel = (channelId: string | null) => {
       setLocalStream(null);
     }
     
-    // Отключаемся от канала
+    // Отключаемся от каналов
     if (channelRef.current) {
       channelRef.current.unsubscribe();
       channelRef.current = null;
     }
     
+    if (voicePresenceRef.current) {
+      voicePresenceRef.current.unsubscribe();
+      voicePresenceRef.current = null;
+    }
+    
     setIsConnected(false);
     setIsRecording(false);
     setConnectedUsers([]);
+    setIsSpeaking(false);
   }, [localStream]);
 
   // Переключение мута
@@ -252,7 +338,10 @@ export const useVoiceChannel = (channelId: string | null) => {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMuted(!audioTrack.enabled);
         
-        // Обновляем статус в канале
+        // Обновляем статус в каналах
+        await updateVoicePresence(isSpeaking);
+        
+        // Обновляем статус в обычном канале
         if (channelRef.current) {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
@@ -261,7 +350,7 @@ export const useVoiceChannel = (channelId: string | null) => {
               .from('profiles')
               .select('username, display_name')
               .eq('user_id', user.id)
-              .single();
+              .maybeSingle();
             
             const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
             
@@ -275,14 +364,14 @@ export const useVoiceChannel = (channelId: string | null) => {
         }
       }
     }
-  }, [localStream]);
+  }, [localStream, isSpeaking, updateVoicePresence]);
 
   // Инициация соединения с другими пользователями
   const initiateConnections = useCallback(async () => {
     if (!channelRef.current) return;
     
-    const currentUsers = connectedUsers.filter(async (user) => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const currentUsers = connectedUsers.filter((user) => {
       return user.user_id !== currentUser?.id;
     });
     
@@ -297,7 +386,7 @@ export const useVoiceChannel = (channelId: string | null) => {
           event: 'offer',
           payload: {
             offer,
-            from: (await supabase.auth.getUser()).data.user?.id,
+            from: currentUser?.id,
             to: user.user_id
           }
         });
@@ -319,6 +408,11 @@ export const useVoiceChannel = (channelId: string | null) => {
       channelRef.current = null;
     }
     
+    if (voicePresenceRef.current) {
+      voicePresenceRef.current.unsubscribe();
+      voicePresenceRef.current = null;
+    }
+    
     // Подключаемся только если есть channelId
     if (channelId) {
       connectToVoiceChannel();
@@ -330,22 +424,27 @@ export const useVoiceChannel = (channelId: string | null) => {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
+      if (voicePresenceRef.current) {
+        voicePresenceRef.current.unsubscribe();
+        voicePresenceRef.current = null;
+      }
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);
       }
       setIsConnected(false);
       setIsRecording(false);
+      setIsSpeaking(false);
       setConnectedUsers([]);
     };
-  }, [channelId]); // Убираем функции из зависимостей
+  }, [channelId]);
 
   return {
     isConnected,
     isRecording,
     isMuted,
+    isSpeaking,
     connectedUsers,
-    connectToVoiceChannel,
     disconnectFromVoiceChannel,
     toggleMute
   };

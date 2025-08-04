@@ -5,6 +5,7 @@ import { Badge } from "./ui/badge";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimePresence } from "@/hooks/useRealtime";
 
 interface ChannelSidebarProps {
   serverId: string;
@@ -17,6 +18,7 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
   const { user } = useAuth();
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { onlineUsers: voiceChannelUsers } = useRealtimePresence(`voice_channels_${serverId}`);
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -35,6 +37,11 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
 
     loadChannels();
   }, [serverId]);
+
+  // Функция для получения пользователей в определенном голосовом канале
+  const getUsersInVoiceChannel = (channelId: string) => {
+    return voiceChannelUsers.filter((u: any) => u.channel_id === channelId);
+  };
 
   return (
     <div className="w-60 bg-discord-channel-bg flex flex-col">
@@ -89,17 +96,61 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
             {loading ? (
               <div className="text-xs text-discord-channel-text px-2">Загрузка...</div>
             ) : (
-              channels.filter(ch => ch.type === "voice").map((channel) => (
-                <Button
-                  key={channel.id}
-                  variant="ghost"
-                  className="w-full justify-start px-2 py-1 h-8 rounded-md mb-0.5 text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
-                  onClick={() => onChannelChange(channel.id)}
-                >
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  <span className="flex-1 text-left">{channel.name}</span>
-                </Button>
-              ))
+              channels.filter(ch => ch.type === "voice").map((channel) => {
+                const usersInChannel = getUsersInVoiceChannel(channel.id);
+                return (
+                  <div key={channel.id} className="mb-1">
+                    <Button
+                      variant="ghost"
+                      className={`w-full justify-start px-2 py-1 h-8 rounded-md ${
+                        activeChannel === channel.id
+                          ? "bg-discord-server-active text-foreground"
+                          : "text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
+                      }`}
+                      onClick={() => onChannelChange(channel.id)}
+                    >
+                      <Volume2 className="h-4 w-4 mr-2" />
+                      <span className="flex-1 text-left">{channel.name}</span>
+                      {usersInChannel.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 h-4 text-xs">
+                          {usersInChannel.length}
+                        </Badge>
+                      )}
+                    </Button>
+                    
+                    {/* Пользователи в голосовом канале */}
+                    {usersInChannel.length > 0 && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {usersInChannel.map((voiceUser: any) => (
+                          <div
+                            key={voiceUser.user_id}
+                            className="flex items-center gap-2 px-2 py-1 text-sm text-discord-channel-text hover:text-foreground rounded"
+                          >
+                            <div className="relative">
+                              <Avatar className={`h-5 w-5 ${voiceUser.isSpeaking ? 'ring-2 ring-green-500 ring-offset-1 ring-offset-discord-channel-bg' : ''}`}>
+                                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                                  {voiceUser.username?.charAt(0)?.toUpperCase() || '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                              {voiceUser.isSpeaking && (
+                                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                              )}
+                            </div>
+                            <span className="flex-1 truncate text-xs">
+                              {voiceUser.username}
+                            </span>
+                            {voiceUser.isMuted && (
+                              <div className="w-3 h-3 bg-red-500 rounded-full flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
