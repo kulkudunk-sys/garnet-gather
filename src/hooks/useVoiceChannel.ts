@@ -77,9 +77,11 @@ export const useVoiceChannel = (channelId: string | null) => {
 
   // Автоматическое подключение к голосовому каналу при изменении channelId
   const connectToVoiceChannel = useCallback(async () => {
-    if (!channelId) return;
+    if (!channelId || channelRef.current) return; // Предотвращаем множественные подключения
 
     try {
+      console.log('Connecting to voice channel:', channelId);
+      
       // Получаем доступ к микрофону
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -177,7 +179,7 @@ export const useVoiceChannel = (channelId: string | null) => {
                 .from('profiles')
                 .select('username, display_name')
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
               
               if (profileError) {
                 console.error('Error fetching profile:', profileError);
@@ -211,7 +213,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     } catch (error) {
       console.error('Error connecting to voice channel:', error);
     }
-  }, [channelId, isMuted, createPeerConnection]);
+  }, [channelId, isMuted]); // Убираем createPeerConnection из зависимостей
 
   // Отключение от голосового канала
   const disconnectFromVoiceChannel = useCallback(() => {
@@ -311,19 +313,32 @@ export const useVoiceChannel = (channelId: string | null) => {
 
   // Автоматическое подключение при изменении channelId
   useEffect(() => {
+    // Очищаем предыдущее соединение
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+    }
+    
+    // Подключаемся только если есть channelId
     if (channelId) {
       connectToVoiceChannel();
-    } else {
-      disconnectFromVoiceChannel();
     }
-  }, [channelId, connectToVoiceChannel, disconnectFromVoiceChannel]);
-
-  // Очистка при размонтировании
-  useEffect(() => {
+    
+    // Отключаемся при размонтировании или смене канала
     return () => {
-      disconnectFromVoiceChannel();
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      setIsConnected(false);
+      setIsRecording(false);
+      setConnectedUsers([]);
     };
-  }, [disconnectFromVoiceChannel]);
+  }, [channelId]); // Убираем функции из зависимостей
 
   return {
     isConnected,
