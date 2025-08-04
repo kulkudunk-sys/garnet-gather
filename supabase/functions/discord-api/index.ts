@@ -266,13 +266,16 @@ async function handleMessages(req: Request, supabaseClient: any, userId: string)
       .from('messages')
       .select(`
         *,
-        profiles:user_id(username, display_name, avatar_url)
+        profiles!messages_user_id_fkey(username, display_name, avatar_url)
       `)
       .eq('channel_id', channelId)
       .order('created_at', { ascending: false })
       .limit(limit)
     
-    if (error) throw error
+    if (error) {
+      console.error('Messages fetch error:', error)
+      throw error
+    }
     
     return new Response(
       JSON.stringify({ messages: messages.reverse() }),
@@ -303,11 +306,14 @@ async function handleMessages(req: Request, supabaseClient: any, userId: string)
       })
       .select(`
         *,
-        profiles:user_id(username, display_name, avatar_url)
+        profiles!messages_user_id_fkey(username, display_name, avatar_url)
       `)
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('Message send error:', error)
+      throw error
+    }
     
     return new Response(
       JSON.stringify({ message }),
