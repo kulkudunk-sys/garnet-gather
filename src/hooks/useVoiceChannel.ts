@@ -96,12 +96,14 @@ export const useVoiceChannel = (channelId: string | null) => {
       const channel = supabase.channel(`voice_channel:${channelId}`)
         .on('presence', { event: 'sync' }, () => {
           const state = channel.presenceState();
+          console.log('Voice channel presence sync:', state);
           const users: VoiceUser[] = Object.values(state).flat().map((presence: any) => ({
             user_id: presence.user_id,
             username: presence.username,
             isMuted: presence.isMuted || false,
             isSpeaking: false
           }));
+          console.log('Connected users:', users);
           setConnectedUsers(users);
         })
         .on('presence', { event: 'join' }, async ({ newPresences }) => {
@@ -163,13 +165,25 @@ export const useVoiceChannel = (channelId: string | null) => {
           }
         })
         .subscribe(async (status) => {
+          console.log('Voice channel subscription status:', status);
           if (status === 'SUBSCRIBED') {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
+              // Получаем профиль пользователя
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('username, display_name')
+                .eq('user_id', user.id)
+                .single();
+              
+              const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+              
+              console.log('Tracking user presence:', { user_id: user.id, username, isMuted });
+              
               // Присоединяемся к голосовому каналу
               await channel.track({
                 user_id: user.id,
-                username: user.email?.split('@')[0] || 'User',
+                username: username,
                 isMuted: isMuted,
                 joined_at: new Date().toISOString()
               });
@@ -226,9 +240,18 @@ export const useVoiceChannel = (channelId: string | null) => {
         if (channelRef.current) {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            // Получаем профиль пользователя
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('username, display_name')
+              .eq('user_id', user.id)
+              .single();
+            
+            const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+            
             await channelRef.current.track({
               user_id: user.id,
-              username: user.email?.split('@')[0] || 'User',
+              username: username,
               isMuted: !audioTrack.enabled,
               joined_at: new Date().toISOString()
             });
