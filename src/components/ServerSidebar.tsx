@@ -1,13 +1,8 @@
 import { Home, Plus, Hash } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-
-const servers = [
-  { id: "home", name: "Home", icon: Home, isHome: true },
-  { id: "1", name: "Gaming", avatar: "G", color: "bg-blue-500" },
-  { id: "2", name: "Work", avatar: "W", color: "bg-green-500" },
-  { id: "3", name: "Friends", avatar: "F", color: "bg-purple-500" },
-];
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface ServerSidebarProps {
   activeServer: string;
@@ -15,9 +10,34 @@ interface ServerSidebarProps {
 }
 
 export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarProps) => {
+  const [servers, setServers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadServers = async () => {
+      try {
+        const serversData = await api.getServers();
+        setServers([
+          { id: "home", name: "Личные сообщения", icon: Home, isHome: true },
+          ...serversData
+        ]);
+      } catch (error) {
+        console.error("Ошибка загрузки серверов:", error);
+        setServers([{ id: "home", name: "Личные сообщения", icon: Home, isHome: true }]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadServers();
+  }, []);
+
   return (
     <div className="w-18 bg-discord-server-bg flex flex-col items-center py-3 space-y-2">
-      {servers.map((server) => (
+      {loading ? (
+        <div className="text-xs text-discord-channel-text">Загрузка...</div>
+      ) : (
+        servers.map((server) => (
         <div key={server.id} className="relative group">
           {server.isHome ? (
             <Button
@@ -44,9 +64,9 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
               onClick={() => onServerChange(server.id)}
             >
               <Avatar className="w-12 h-12">
-                <AvatarImage src="" />
-                <AvatarFallback className={`${server.color} text-white font-semibold`}>
-                  {server.avatar}
+                <AvatarImage src={server.icon_url || ""} />
+                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                  {server.name?.[0]?.toUpperCase() || "?"}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -62,7 +82,8 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
             {server.name}
           </div>
         </div>
-      ))}
+        ))
+      )}
       
       {/* Add server button */}
       <div className="relative group">

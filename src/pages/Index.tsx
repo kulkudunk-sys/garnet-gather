@@ -7,31 +7,55 @@ import { UserList } from "@/components/UserList";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User } from "lucide-react";
-
-const servers = {
-  home: { name: "Личные сообщения", channels: [] },
-  "1": { name: "Gaming Server", channels: ["general", "random", "gaming", "voice1", "voice2"] },
-  "2": { name: "Work Space", channels: ["general", "announcements", "projects"] },
-  "3": { name: "Friends", channels: ["general", "memes", "voice-chat"] },
-};
-
-const channels = {
-  general: { name: "общий", type: "text" },
-  random: { name: "случайное", type: "text" },
-  gaming: { name: "игры", type: "text" },
-  voice1: { name: "Общий голосовой", type: "voice" },
-  voice2: { name: "Игры", type: "voice" },
-  announcements: { name: "объявления", type: "text" },
-  projects: { name: "проекты", type: "text" },
-  memes: { name: "мемы", type: "text" },
-  "voice-chat": { name: "Голосовой чат", type: "voice" },
-};
+import { api } from "@/lib/api";
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, loading, signOut, isAuthenticated } = useAuth();
-  const [activeServer, setActiveServer] = useState("1");
-  const [activeChannel, setActiveChannel] = useState("general");
+  const [activeServer, setActiveServer] = useState("");
+  const [activeChannel, setActiveChannel] = useState("");
+  const [servers, setServers] = useState<any[]>([]);
+  const [channels, setChannels] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadServers = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const serversData = await api.getServers();
+        setServers(serversData);
+        
+        // Выбираем первый сервер по умолчанию
+        if (serversData.length > 0 && !activeServer) {
+          setActiveServer(serversData[0].id);
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки серверов:", error);
+      }
+    };
+
+    loadServers();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const loadChannels = async () => {
+      if (!activeServer) return;
+      
+      try {
+        const channelsData = await api.getChannels(activeServer);
+        setChannels(channelsData);
+        
+        // Выбираем первый канал по умолчанию
+        if (channelsData.length > 0 && !activeChannel) {
+          setActiveChannel(channelsData[0].id);
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки каналов:", error);
+      }
+    };
+
+    loadChannels();
+  }, [activeServer]);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -51,15 +75,24 @@ const Index = () => {
     return null;
   }
 
-  const currentServer = servers[activeServer as keyof typeof servers];
-  const currentChannel = channels[activeChannel as keyof typeof channels];
+  const currentServer = servers.find(s => s.id === activeServer);
+  const currentChannel = channels.find(c => c.id === activeChannel);
 
-  const handleServerChange = (serverId: string) => {
+  const handleServerChange = async (serverId: string) => {
     setActiveServer(serverId);
-    // Автоматически переключаемся на первый канал сервера
-    const server = servers[serverId as keyof typeof servers];
-    if (server && server.channels.length > 0) {
-      setActiveChannel(server.channels[0]);
+    setActiveChannel("");
+    
+    // Загружаем каналы для нового сервера
+    try {
+      const channelsData = await api.getChannels(serverId);
+      setChannels(channelsData);
+      
+      // Автоматически переключаемся на первый канал
+      if (channelsData.length > 0) {
+        setActiveChannel(channelsData[0].id);
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки каналов:", error);
     }
   };
 
@@ -81,17 +114,23 @@ const Index = () => {
       />
       
       {/* Channel Sidebar */}
-      <ChannelSidebar 
-        serverName={currentServer?.name || "Server"}
-        activeChannel={activeChannel}
-        onChannelChange={setActiveChannel}
-      />
+      {activeServer && (
+        <ChannelSidebar 
+          serverId={activeServer}
+          serverName={currentServer?.name || "Server"}
+          activeChannel={activeChannel}
+          onChannelChange={setActiveChannel}
+        />
+      )}
       
       {/* Chat Area */}
-      <ChatArea 
-        channelName={currentChannel?.name || "канал"}
-        channelType={currentChannel?.type || "text"}
-      />
+      {activeChannel && currentChannel && (
+        <ChatArea 
+          channelId={activeChannel}
+          channelName={currentChannel?.name || "канал"}
+          channelType={currentChannel?.type || "text"}
+        />
+      )}
       
       {/* User List with Auth Info */}
       {currentChannel?.type === "text" && (
@@ -119,7 +158,7 @@ const Index = () => {
               </Button>
             </div>
           </div>
-          <UserList />
+          <UserList serverId={activeServer} />
           <div className="p-4 border-t border-accent/20 mt-auto">
             <Button
               variant="ghost"

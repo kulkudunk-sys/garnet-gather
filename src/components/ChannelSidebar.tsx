@@ -2,41 +2,39 @@ import { Hash, Volume2, Settings, ChevronDown, Plus, UserPlus } from "lucide-rea
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-
-const channels = [
-  { id: "general", name: "общий", type: "text", unread: 3 },
-  { id: "random", name: "случайное", type: "text", unread: 0 },
-  { id: "gaming", name: "игры", type: "text", unread: 1 },
-  { id: "voice1", name: "Общий голосовой", type: "voice", users: 2 },
-  { id: "voice2", name: "Игры", type: "voice", users: 0 },
-];
-
-const onlineUsers = [
-  { id: "1", name: "Алексей", status: "online", avatar: "А" },
-  { id: "2", name: "Мария", status: "away", avatar: "М" },
-  { id: "3", name: "Дмитрий", status: "busy", avatar: "Д" },
-];
-
-const offlineUsers = [
-  { id: "4", name: "Елена", status: "offline", avatar: "Е" },
-  { id: "5", name: "Иван", status: "offline", avatar: "И" },
-];
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChannelSidebarProps {
+  serverId: string;
   serverName: string;
   activeChannel: string;
   onChannelChange: (channelId: string) => void;
 }
 
-export const ChannelSidebar = ({ serverName, activeChannel, onChannelChange }: ChannelSidebarProps) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "online": return "bg-discord-online";
-      case "away": return "bg-discord-away";
-      case "busy": return "bg-discord-busy";
-      default: return "bg-discord-offline";
-    }
-  };
+export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelChange }: ChannelSidebarProps) => {
+  const { user } = useAuth();
+  const [channels, setChannels] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadChannels = async () => {
+      if (!serverId) return;
+      
+      try {
+        const channelsData = await api.getChannels(serverId);
+        setChannels(channelsData);
+      } catch (error) {
+        console.error("Ошибка загрузки каналов:", error);
+        setChannels([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadChannels();
+  }, [serverId]);
 
   return (
     <div className="w-60 bg-discord-channel-bg flex flex-col">
@@ -58,26 +56,25 @@ export const ChannelSidebar = ({ serverName, activeChannel, onChannelChange }: C
               <Plus className="h-4 w-4 text-discord-channel-text hover:text-foreground cursor-pointer" />
             </div>
             
-            {channels.filter(ch => ch.type === "text").map((channel) => (
-              <Button
-                key={channel.id}
-                variant="ghost"
-                className={`w-full justify-start px-2 py-1 h-8 rounded-md mb-0.5 ${
-                  activeChannel === channel.id
-                    ? "bg-discord-server-active text-foreground"
-                    : "text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
-                }`}
-                onClick={() => onChannelChange(channel.id)}
-              >
-                <Hash className="h-4 w-4 mr-2" />
-                <span className="flex-1 text-left">{channel.name}</span>
-                {channel.unread > 0 && (
-                  <Badge variant="destructive" className="h-4 px-1.5 text-xs">
-                    {channel.unread}
-                  </Badge>
-                )}
-              </Button>
-            ))}
+            {loading ? (
+              <div className="text-xs text-discord-channel-text px-2">Загрузка...</div>
+            ) : (
+              channels.filter(ch => ch.type === "text").map((channel) => (
+                <Button
+                  key={channel.id}
+                  variant="ghost"
+                  className={`w-full justify-start px-2 py-1 h-8 rounded-md mb-0.5 ${
+                    activeChannel === channel.id
+                      ? "bg-discord-server-active text-foreground"
+                      : "text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
+                  }`}
+                  onClick={() => onChannelChange(channel.id)}
+                >
+                  <Hash className="h-4 w-4 mr-2" />
+                  <span className="flex-1 text-left">{channel.name}</span>
+                </Button>
+              ))
+            )}
           </div>
 
           {/* Voice Channels */}
@@ -89,20 +86,21 @@ export const ChannelSidebar = ({ serverName, activeChannel, onChannelChange }: C
               <Plus className="h-4 w-4 text-discord-channel-text hover:text-foreground cursor-pointer" />
             </div>
             
-            {channels.filter(ch => ch.type === "voice").map((channel) => (
-              <Button
-                key={channel.id}
-                variant="ghost"
-                className="w-full justify-start px-2 py-1 h-8 rounded-md mb-0.5 text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
-                onClick={() => onChannelChange(channel.id)}
-              >
-                <Volume2 className="h-4 w-4 mr-2" />
-                <span className="flex-1 text-left">{channel.name}</span>
-                {channel.users > 0 && (
-                  <span className="text-xs text-discord-channel-text">{channel.users}</span>
-                )}
-              </Button>
-            ))}
+            {loading ? (
+              <div className="text-xs text-discord-channel-text px-2">Загрузка...</div>
+            ) : (
+              channels.filter(ch => ch.type === "voice").map((channel) => (
+                <Button
+                  key={channel.id}
+                  variant="ghost"
+                  className="w-full justify-start px-2 py-1 h-8 rounded-md mb-0.5 text-discord-channel-text hover:bg-discord-channel-hover hover:text-foreground"
+                  onClick={() => onChannelChange(channel.id)}
+                >
+                  <Volume2 className="h-4 w-4 mr-2" />
+                  <span className="flex-1 text-left">{channel.name}</span>
+                </Button>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -120,7 +118,9 @@ export const ChannelSidebar = ({ serverName, activeChannel, onChannelChange }: C
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-discord-online border-2 border-discord-chat-input rounded-full" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">Мой профиль</div>
+            <div className="text-sm font-medium text-foreground truncate">
+              {user?.email?.split('@')[0] || 'Пользователь'}
+            </div>
             <div className="text-xs text-discord-channel-text truncate">В сети</div>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8 text-discord-channel-text hover:text-foreground">

@@ -2,53 +2,29 @@ import { Send, Smile, Plus, Gift, Image } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { useState } from "react";
-
-const messages = [
-  {
-    id: "1",
-    user: { name: "Алексей", avatar: "А", color: "bg-blue-500" },
-    content: "Привет всем! Как дела?",
-    timestamp: "12:30",
-    date: "Сегодня"
-  },
-  {
-    id: "2",
-    user: { name: "Мария", avatar: "М", color: "bg-green-500" },
-    content: "Отлично! Только что закончила проект 🎉",
-    timestamp: "12:32",
-    date: "Сегодня"
-  },
-  {
-    id: "3",
-    user: { name: "Дмитрий", avatar: "Д", color: "bg-purple-500" },
-    content: "Круто! А я играю в новую игру, кто-нибудь хочет присоединиться?",
-    timestamp: "12:35",
-    date: "Сегодня"
-  },
-  {
-    id: "4",
-    user: { name: "Алексей", avatar: "А", color: "bg-blue-500" },
-    content: "Во что играешь? Может позже подключусь",
-    timestamp: "12:37",
-    date: "Сегодня"
-  }
-];
+import { useState, useEffect } from "react";
+import { useRealtimeMessages } from "@/hooks/useRealtime";
+import { api } from "@/lib/api";
 
 interface ChatAreaProps {
+  channelId: string | null;
   channelName: string;
   channelType: string;
 }
 
-export const ChatArea = ({ channelName, channelType }: ChatAreaProps) => {
+export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
+  const { messages, setMessages } = useRealtimeMessages(channelId);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim()) {
-      // Here would be the logic to send message
-      console.log("Отправка сообщения:", newMessage);
-      setNewMessage("");
+    if (newMessage.trim() && channelId) {
+      try {
+        await api.sendMessage(channelId, newMessage);
+        setNewMessage("");
+      } catch (error) {
+        console.error("Ошибка отправки сообщения:", error);
+      }
     }
   };
 
@@ -81,45 +57,57 @@ export const ChatArea = ({ channelName, channelType }: ChatAreaProps) => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => {
-          const showAvatar = index === 0 || messages[index - 1].user.name !== message.user.name;
-          
-          return (
-            <div
-              key={message.id}
-              className={`group hover:bg-discord-message-hover px-4 py-1 rounded ${
-                showAvatar ? "pt-3" : ""
-              }`}
-            >
-              <div className="flex items-start space-x-3">
-                {showAvatar ? (
-                  <Avatar className="h-10 w-10 mt-0.5">
-                    <AvatarImage src="" />
-                    <AvatarFallback className={`${message.user.color} text-white text-sm`}>
-                      {message.user.avatar}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <div className="w-10 flex-shrink-0 flex items-center justify-center">
-                    <span className="text-xs text-discord-channel-text opacity-0 group-hover:opacity-100 transition-opacity">
-                      {message.timestamp}
-                    </span>
-                  </div>
-                )}
-                
-                <div className="flex-1 min-w-0">
-                  {showAvatar && (
-                    <div className="flex items-baseline space-x-2 mb-1">
-                      <span className="font-semibold text-foreground">{message.user.name}</span>
-                      <span className="text-xs text-discord-channel-text">{message.timestamp}</span>
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-discord-channel-text">
+            <p>Пока нет сообщений в этом канале</p>
+          </div>
+        ) : (
+          messages.map((message, index) => {
+            const showAvatar = index === 0 || messages[index - 1].user_id !== message.user_id;
+            const timestamp = new Date(message.created_at).toLocaleTimeString('ru-RU', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            });
+            
+            return (
+              <div
+                key={message.id}
+                className={`group hover:bg-discord-message-hover px-4 py-1 rounded ${
+                  showAvatar ? "pt-3" : ""
+                }`}
+              >
+                <div className="flex items-start space-x-3">
+                  {showAvatar ? (
+                    <Avatar className="h-10 w-10 mt-0.5">
+                      <AvatarImage src={message.profiles.avatar_url || ""} />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                        {message.profiles.username?.[0]?.toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <div className="w-10 flex-shrink-0 flex items-center justify-center">
+                      <span className="text-xs text-discord-channel-text opacity-0 group-hover:opacity-100 transition-opacity">
+                        {timestamp}
+                      </span>
                     </div>
                   )}
-                  <p className="text-foreground text-sm leading-relaxed">{message.content}</p>
+                  
+                  <div className="flex-1 min-w-0">
+                    {showAvatar && (
+                      <div className="flex items-baseline space-x-2 mb-1">
+                        <span className="font-semibold text-foreground">
+                          {message.profiles.display_name || message.profiles.username}
+                        </span>
+                        <span className="text-xs text-discord-channel-text">{timestamp}</span>
+                      </div>
+                    )}
+                    <p className="text-foreground text-sm leading-relaxed">{message.content}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Message Input */}
