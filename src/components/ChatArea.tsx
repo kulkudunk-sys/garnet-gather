@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useState, useEffect } from "react";
 import { useRealtimeMessages } from "@/hooks/useRealtime";
 import { api } from "@/lib/api";
+import { VoiceChat } from "./VoiceChat";
 
 interface ChatAreaProps {
   channelId: string | null;
@@ -46,18 +47,10 @@ export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps)
 
   if (channelType === "voice") {
     return (
-      <div className="flex-1 bg-discord-chat-bg flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🎤</div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Голосовой канал</h2>
-          <p className="text-discord-channel-text mb-6">
-            Подключитесь к голосовому каналу "{channelName}"
-          </p>
-          <Button className="bg-discord-server-active hover:bg-discord-server-hover">
-            Присоединиться к каналу
-          </Button>
-        </div>
-      </div>
+      <VoiceChat 
+        channelId={channelId || ""}
+        channelName={channelName}
+      />
     );
   }
 
