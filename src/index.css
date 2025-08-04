@@ -8,56 +8,56 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Discord-inspired design system */
-    --background: 12 8% 19%;           /* #332B2B */
-    --foreground: 0 0% 96%;
+    /* Cyan-based design system */
+    --background: 0 0% 0%;             /* #000000 */
+    --foreground: 0 0% 80%;            /* #cccccc */
     
-    --card: 12 8% 19%;
-    --card-foreground: 0 0% 96%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 80%;
     
-    --popover: 8 7% 22%;
-    --popover-foreground: 0 0% 96%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 80%;
     
-    --primary: 8 30% 32%;              /* #6B3836 */
-    --primary-foreground: 0 0% 96%;
+    --primary: 180 100% 50%;           /* #00ffff */
+    --primary-foreground: 0 0% 0%;
     
-    --secondary: 12 8% 24%;
-    --secondary-foreground: 0 0% 96%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 80%;
     
-    --muted: 12 8% 15%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 0 0% 8%;
+    --muted-foreground: 0 0% 60%;
     
-    --accent: 8 30% 38%;
-    --accent-foreground: 0 0% 96%;
+    --accent: 180 100% 60%;            /* #33ffff */
+    --accent-foreground: 0 0% 0%;
     
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 96%;
+    --destructive: 341 100% 50%;       /* #ff004f */
+    --destructive-foreground: 0 0% 100%;
     
-    --border: 12 8% 25%;
-    --input: 12 8% 15%;
-    --ring: 8 30% 40%;
+    --border: 0 0% 15%;
+    --input: 0 0% 5%;
+    --ring: 180 100% 50%;
     
     --radius: 0.375rem;
     
-    /* Discord server sidebar */
-    --server-bg: 12 8% 14%;
-    --server-hover: 8 30% 35%;
-    --server-active: 8 30% 32%;
+    /* Server sidebar */
+    --server-bg: 0 0% 3%;
+    --server-hover: 180 100% 30%;      /* #009999 */
+    --server-active: 180 100% 50%;     /* #00ffff */
     
-    /* Discord channel sidebar */
-    --channel-bg: 12 8% 19%;
-    --channel-hover: 12 8% 22%;
-    --channel-text: 0 0% 75%;
+    /* Channel sidebar */
+    --channel-bg: 0 0% 5%;
+    --channel-hover: 0 0% 8%;
+    --channel-text: 0 0% 70%;
     
     /* Chat area */
-    --chat-bg: 12 8% 24%;
-    --chat-input: 12 8% 19%;
-    --message-hover: 12 8% 21%;
+    --chat-bg: 0 0% 8%;
+    --chat-input: 0 0% 5%;
+    --message-hover: 0 0% 10%;
     
-    /* Online indicator */
-    --online: 120 70% 50%;
+    /* Status indicators */
+    --online: 120 100% 50%;            /* #00ff00 */
     --away: 45 100% 60%;
-    --busy: 0 70% 50%;
+    --busy: 341 100% 50%;              /* #ff004f */
     --offline: 0 0% 45%;
   }
 }
