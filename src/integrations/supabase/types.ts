@@ -190,7 +190,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_server_role: {
+        Args: { server_id_param: string; user_id_param: string }
+        Returns: string
+      }
+      is_server_member: {
+        Args: { server_id_param: string; user_id_param: string }
+        Returns: boolean
+      }
+      is_server_owner: {
+        Args: { server_id_param: string; user_id_param: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
