@@ -93,7 +93,13 @@ export const useVoiceChannel = (channelId: string | null) => {
       setIsRecording(true);
 
       // Создаем канал для сигналинга
-      const channel = supabase.channel(`voice_channel:${channelId}`)
+      const channel = supabase.channel(`voice_channel:${channelId}`, {
+        config: {
+          presence: {
+            key: 'user_id'
+          }
+        }
+      })
         .on('presence', { event: 'sync' }, () => {
           const state = channel.presenceState();
           console.log('Voice channel presence sync:', state);

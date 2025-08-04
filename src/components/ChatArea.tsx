@@ -11,9 +11,10 @@ interface ChatAreaProps {
   channelId: string | null;
   channelName: string;
   channelType: string;
+  serverId?: string;
 }
 
-export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps) => {
+export const ChatArea = ({ channelId, channelName, channelType, serverId }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
   const { messages, setMessages } = useRealtimeMessages(channelId);
   
@@ -50,6 +51,7 @@ export const ChatArea = ({ channelId, channelName, channelType }: ChatAreaProps)
       <VoiceChannelInterface 
         channelId={channelId || ""}
         channelName={channelName}
+        serverId={serverId}
       />
     );
   }

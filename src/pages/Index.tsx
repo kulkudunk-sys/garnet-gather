@@ -161,6 +161,7 @@ const Index = () => {
             channelId={activeChannel}
             channelName={currentChannel?.name || "канал"}
             channelType={currentChannel?.type || "text"}
+            serverId={activeServer}
           />
         )
       )}

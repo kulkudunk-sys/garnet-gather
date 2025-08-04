@@ -4,14 +4,16 @@ import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { UserList } from "./UserList";
 
 interface VoiceChannelInterfaceProps {
   channelId: string;
   channelName: string;
+  serverId?: string;
   onClose?: () => void;
 }
 
-export const VoiceChannelInterface = ({ channelId, channelName, onClose }: VoiceChannelInterfaceProps) => {
+export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClose }: VoiceChannelInterfaceProps) => {
   const {
     isConnected,
     isRecording,
@@ -31,7 +33,9 @@ export const VoiceChannelInterface = ({ channelId, channelName, onClose }: Voice
   };
 
   return (
-    <div className="flex-1 bg-discord-chat-bg flex flex-col">
+    <div className="flex-1 bg-discord-chat-bg flex">
+      {/* Main Voice Interface */}
+      <div className="flex-1 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-accent/20">
         <div className="flex items-center justify-between">
@@ -165,6 +169,14 @@ export const VoiceChannelInterface = ({ channelId, channelName, onClose }: Voice
           </Card>
         )}
       </div>
+      </div>
+      
+      {/* Server Members List */}
+      {serverId && (
+        <div className="w-60 bg-discord-sidebar-bg border-l border-accent/20">
+          <UserList serverId={serverId} />
+        </div>
+      )}
     </div>
   );
 };
