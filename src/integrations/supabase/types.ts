@@ -55,6 +55,84 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          content: string
+          created_at: string
+          edited_at: string | null
+          id: string
+          is_read: boolean
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          is_read?: boolean
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          is_read?: boolean
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
+      friend_requests: {
+        Row: {
+          created_at: string
+          id: string
+          receiver_id: string
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          receiver_id: string
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          receiver_id?: string
+          sender_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      friendships: {
+        Row: {
+          created_at: string
+          id: string
+          user1_id: string
+          user2_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user1_id: string
+          user2_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user1_id?: string
+          user2_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           channel_id: string
@@ -92,6 +170,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_number: number | null
           avatar_url: string | null
           created_at: string
           display_name: string | null
@@ -102,6 +181,7 @@ export type Database = {
           username: string
         }
         Insert: {
+          account_number?: number | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
@@ -112,6 +192,7 @@ export type Database = {
           username: string
         }
         Update: {
+          account_number?: number | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null

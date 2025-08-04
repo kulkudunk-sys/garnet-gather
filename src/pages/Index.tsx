@@ -4,6 +4,8 @@ import { ServerSidebar } from "@/components/ServerSidebar";
 import { ChannelSidebar } from "@/components/ChannelSidebar";
 import { ChatArea } from "@/components/ChatArea";
 import { UserList } from "@/components/UserList";
+import { DirectMessagesSidebar } from "@/components/DirectMessagesSidebar";
+import { DirectMessagesArea } from "@/components/DirectMessagesArea";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User } from "lucide-react";
@@ -14,6 +16,7 @@ const Index = () => {
   const { user, loading, signOut, isAuthenticated } = useAuth();
   const [activeServer, setActiveServer] = useState("");
   const [activeChannel, setActiveChannel] = useState("");
+  const [activeDirectMessage, setActiveDirectMessage] = useState("");
   const [servers, setServers] = useState<any[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
 
@@ -25,12 +28,18 @@ const Index = () => {
         const serversData = await api.getServers();
         setServers(serversData);
         
-        // Выбираем первый сервер по умолчанию
-        if (serversData.length > 0 && !activeServer) {
-          setActiveServer(serversData[0].id);
+        // По умолчанию открываем личные сообщения
+        if (!activeServer) {
+          setActiveServer("home");
+          setActiveDirectMessage("friends");
         }
       } catch (error) {
         console.error("Ошибка загрузки серверов:", error);
+        // Даже если серверы не загрузились, открываем личные сообщения
+        if (!activeServer) {
+          setActiveServer("home");
+          setActiveDirectMessage("friends");
+        }
       }
     };
 
@@ -39,7 +48,7 @@ const Index = () => {
 
   useEffect(() => {
     const loadChannels = async () => {
-      if (!activeServer) return;
+      if (!activeServer || activeServer === "home") return;
       
       try {
         const channelsData = await api.getChannels(activeServer);
@@ -77,10 +86,18 @@ const Index = () => {
 
   const currentServer = servers.find(s => s.id === activeServer);
   const currentChannel = channels.find(c => c.id === activeChannel);
+  const isInDirectMessages = activeServer === "home" || !activeServer;
 
   const handleServerChange = async (serverId: string) => {
     setActiveServer(serverId);
     setActiveChannel("");
+    setActiveDirectMessage("");
+    
+    if (serverId === "home") {
+      // Переключение на личные сообщения
+      setActiveDirectMessage("friends");
+      return;
+    }
     
     // Загружаем каналы для нового сервера
     try {
@@ -105,6 +122,11 @@ const Index = () => {
     navigate('/auth');
   };
 
+  const handleDirectMessageChange = (chatId: string) => {
+    setActiveDirectMessage(chatId);
+    setActiveChannel("");
+  };
+
   return (
     <div className="h-screen flex bg-background overflow-hidden">
       {/* Server Sidebar */}
@@ -113,27 +135,38 @@ const Index = () => {
         onServerChange={handleServerChange}
       />
       
-      {/* Channel Sidebar */}
-      {activeServer && (
-        <ChannelSidebar 
-          serverId={activeServer}
-          serverName={currentServer?.name || "Server"}
-          activeChannel={activeChannel}
-          onChannelChange={setActiveChannel}
+      {/* Conditional Sidebar */}
+      {isInDirectMessages ? (
+        <DirectMessagesSidebar 
+          activeChat={activeDirectMessage}
+          onChatChange={handleDirectMessageChange}
         />
+      ) : (
+        activeServer && (
+          <ChannelSidebar 
+            serverId={activeServer}
+            serverName={currentServer?.name || "Server"}
+            activeChannel={activeChannel}
+            onChannelChange={setActiveChannel}
+          />
+        )
       )}
       
-      {/* Chat Area */}
-      {activeChannel && currentChannel && (
-        <ChatArea 
-          channelId={activeChannel}
-          channelName={currentChannel?.name || "канал"}
-          channelType={currentChannel?.type || "text"}
-        />
+      {/* Main Content Area */}
+      {isInDirectMessages ? (
+        <DirectMessagesArea />
+      ) : (
+        activeChannel && currentChannel && (
+          <ChatArea 
+            channelId={activeChannel}
+            channelName={currentChannel?.name || "канал"}
+            channelType={currentChannel?.type || "text"}
+          />
+        )
       )}
       
-      {/* User List with Auth Info */}
-      {currentChannel?.type === "text" && (
+      {/* User List - только для текстовых каналов серверов */}
+      {!isInDirectMessages && currentChannel?.type === "text" && (
         <div className="w-60 bg-secondary border-l border-accent/20 flex flex-col">
           <div className="p-4 border-b border-accent/20">
             <div className="flex items-center gap-3">
