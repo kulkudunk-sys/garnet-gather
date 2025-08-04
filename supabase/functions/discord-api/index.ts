@@ -262,11 +262,21 @@ async function handleMessages(req: Request, supabaseClient: any, userId: string)
     // Получить сообщения канала
     const limit = parseInt(url.searchParams.get('limit') || '50')
     
+    // Используем простой подход без foreign key названий
     const { data: messages, error } = await supabaseClient
       .from('messages')
       .select(`
-        *,
-        profiles!messages_user_id_fkey(username, display_name, avatar_url)
+        id,
+        content,
+        created_at,
+        edited_at,
+        user_id,
+        channel_id,
+        profiles!inner(
+          username,
+          display_name,
+          avatar_url
+        )
       `)
       .eq('channel_id', channelId)
       .order('created_at', { ascending: false })
@@ -305,8 +315,17 @@ async function handleMessages(req: Request, supabaseClient: any, userId: string)
         content: content.trim()
       })
       .select(`
-        *,
-        profiles!messages_user_id_fkey(username, display_name, avatar_url)
+        id,
+        content,
+        created_at,
+        edited_at,
+        user_id,
+        channel_id,
+        profiles!inner(
+          username,
+          display_name,
+          avatar_url
+        )
       `)
       .single()
     
