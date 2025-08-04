@@ -93,13 +93,7 @@ export const useVoiceChannel = (channelId: string | null) => {
       setIsRecording(true);
 
       // Создаем канал для сигналинга
-      const channel = supabase.channel(`voice_channel:${channelId}`, {
-        config: {
-          presence: {
-            key: 'user_id'
-          }
-        }
-      })
+      const channel = supabase.channel(`voice_channel_${channelId}`)
         .on('presence', { event: 'sync' }, () => {
           const state = channel.presenceState();
           console.log('Voice channel presence sync:', state);
@@ -172,30 +166,44 @@ export const useVoiceChannel = (channelId: string | null) => {
         })
         .subscribe(async (status) => {
           console.log('Voice channel subscription status:', status);
+          
           if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to voice channel');
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
+              console.log('Current user:', user.id);
               // Получаем профиль пользователя
-              const { data: profile } = await supabase
+              const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('username, display_name')
                 .eq('user_id', user.id)
                 .single();
+              
+              if (profileError) {
+                console.error('Error fetching profile:', profileError);
+              }
               
               const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
               
               console.log('Tracking user presence:', { user_id: user.id, username, isMuted });
               
               // Присоединяемся к голосовому каналу
-              await channel.track({
+              const trackResult = await channel.track({
                 user_id: user.id,
                 username: username,
                 isMuted: isMuted,
                 joined_at: new Date().toISOString()
               });
               
+              console.log('Track result:', trackResult);
               setIsConnected(true);
             }
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Channel error occurred');
+          } else if (status === 'TIMED_OUT') {
+            console.error('Channel subscription timed out');
+          } else if (status === 'CLOSED') {
+            console.error('Channel subscription closed');
           }
         });
 
