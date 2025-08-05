@@ -18,7 +18,7 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
   const { user } = useAuth();
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { onlineUsers: voiceChannelUsers } = useRealtimePresence('sidebar_voice_users');
+  const { onlineUsers: voiceChannelUsers } = useRealtimePresence('global_voice_presence_singleton');
 
   useEffect(() => {
     const loadChannels = async () => {

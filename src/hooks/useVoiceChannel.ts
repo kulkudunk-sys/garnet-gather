@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { trackVoiceUser, untrackVoiceUser } from '@/lib/voicePresenceManager';
 
 interface VoiceUser {
   user_id: string;
@@ -63,7 +64,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     detectVoiceActivity();
   }, [isSpeaking]);
 
-  // ПРОСТОЕ И РАБОЧЕЕ обновление presence
+  // ПРОСТОЕ И РАБОЧЕЕ обновление presence через глобальный менеджер
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
     if (!channelId) return;
     
@@ -78,15 +79,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     
     const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
     
-    // ПРЯМОЕ подключение к тому же каналу что используется в sidebar
-    if (!voicePresenceRef.current) {
-      console.log('Creating voice presence channel for SIDEBAR...');
-      voicePresenceRef.current = supabase.channel('sidebar_voice_users');
-      await voicePresenceRef.current.subscribe();
-      console.log('Voice presence channel created and subscribed!');
-    }
-    
-    // Отправляем данные о пользователе
+    // Отправляем данные через глобальный менеджер
     const presenceData = {
       user_id: user.id,
       username: username,
@@ -96,10 +89,10 @@ export const useVoiceChannel = (channelId: string | null) => {
       joined_at: new Date().toISOString()
     };
     
-    console.log('=== TRACKING VOICE PRESENCE ===');
+    console.log('=== UPDATING VOICE PRESENCE VIA MANAGER ===');
     console.log('Presence data:', presenceData);
     
-    await voicePresenceRef.current.track(presenceData);
+    await trackVoiceUser(presenceData);
   }, [channelId, isMuted]);
 
   // Создание RTCPeerConnection для пользователя
@@ -333,13 +326,9 @@ export const useVoiceChannel = (channelId: string | null) => {
       channelRef.current = null;
     }
     
-    // Очищаем presence для sidebar
-    if (voicePresenceRef.current) {
-      console.log('Clearing voice presence from sidebar...');
-      await voicePresenceRef.current.untrack();
-      voicePresenceRef.current.unsubscribe();
-      voicePresenceRef.current = null;
-    }
+    // Очищаем presence через глобальный менеджер
+    console.log('Clearing voice presence via manager...');
+    await untrackVoiceUser();
     
     setIsConnected(false);
     setIsRecording(false);
@@ -441,12 +430,9 @@ export const useVoiceChannel = (channelId: string | null) => {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
-      // Очищаем presence при выходе
-      if (voicePresenceRef.current) {
-        voicePresenceRef.current.untrack();
-        voicePresenceRef.current.unsubscribe();
-        voicePresenceRef.current = null;
-      }
+      // Очищаем presence при выходе через глобальный менеджер
+      console.log('Cleaning up voice presence via manager...');
+      untrackVoiceUser();
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);
