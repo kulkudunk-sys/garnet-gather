@@ -5,7 +5,7 @@ import { Badge } from "./ui/badge";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { useRealtimePresence } from "@/hooks/useRealtime";
+import { getVoicePresenceChannel } from "@/lib/voicePresenceManager";
 
 interface ChannelSidebarProps {
   serverId: string;
@@ -18,7 +18,24 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
   const { user } = useAuth();
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { onlineUsers: voiceChannelUsers } = useRealtimePresence('global_voice_presence_singleton');
+  const [voiceChannelUsers, setVoiceChannelUsers] = useState<any[]>([]);
+
+  // Подключаемся к ТОМУ ЖЕ каналу что использует voicePresenceManager
+  useEffect(() => {
+    const setupVoicePresence = async () => {
+      const channel = await getVoicePresenceChannel();
+      
+      channel.on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const users = Object.values(state).flat();
+        console.log('=== SIDEBAR VOICE PRESENCE SYNC ===');
+        console.log('Users from global voice channel:', users);
+        setVoiceChannelUsers(users as any[]);
+      });
+    };
+    
+    setupVoicePresence();
+  }, []);
 
   useEffect(() => {
     const loadChannels = async () => {
