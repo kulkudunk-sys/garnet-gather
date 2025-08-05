@@ -50,6 +50,9 @@ serve(async (req) => {
       case 'join-server':
         return await handleJoinServer(req, supabaseClient, user.id)
       
+      case 'join-by-invite':
+        return await handleJoinByInvite(req, supabaseClient, user.id)
+      
       case 'search-servers':
         return await handleSearchServers(req, supabaseClient, user.id)
       
@@ -391,6 +394,9 @@ async function handleSearchServers(req: Request, supabaseClient: any, userId: st
   
   const { query } = await req.json()
   
+  console.log('=== SEARCH SERVERS ===');
+  console.log('Query:', query);
+  
   if (!query || query.trim().length === 0) {
     return new Response(
       JSON.stringify({ servers: [] }),
@@ -402,17 +408,37 @@ async function handleSearchServers(req: Request, supabaseClient: any, userId: st
   const { data: allServers, error: serversError } = await supabaseClient
     .from('servers')
     .select(`
-      *,
-      server_members!left(role),
-      member_count:server_members(count)
+      id,
+      name,
+      description,
+      icon_url,
+      owner_id
     `)
     .ilike('name', `%${query.trim()}%`)
     .limit(20)
   
-  if (serversError) throw serversError
+  console.log('Servers found:', allServers?.length || 0);
+  console.log('Search error:', serversError);
   
+  if (serversError) {
+    console.error('Search servers error:', serversError);
+    throw serversError;
+  }
+  
+  // Получаем количество участников для каждого сервера
+  const serverIds = allServers.map(server => server.id);
+  const { data: memberCounts } = await supabaseClient
+    .from('server_members')
+    .select('server_id')
+    .in('server_id', serverIds);
+
+  // Группируем по server_id для подсчета
+  const memberCountMap = memberCounts?.reduce((acc, member) => {
+    acc[member.server_id] = (acc[member.server_id] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>) || {};
+
   // Получаем информацию о том, является ли пользователь участником каждого сервера
-  const serverIds = allServers.map(server => server.id)
   const { data: userMemberships } = await supabaseClient
     .from('server_members')
     .select('server_id')
@@ -427,12 +453,120 @@ async function handleSearchServers(req: Request, supabaseClient: any, userId: st
     name: server.name,
     description: server.description,
     icon_url: server.icon_url,
-    member_count: server.member_count?.[0]?.count || 0,
+    member_count: memberCountMap[server.id] || 0,
     is_member: userServerIds.has(server.id)
   }))
   
+  console.log('Final servers result:', servers);
+  
   return new Response(
     JSON.stringify({ servers }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
+async function handleJoinByInvite(req: Request, supabaseClient: any, userId: string) {
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { 
+        status: 405, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  const { invite_code } = await req.json()
+  
+  console.log('=== JOIN BY INVITE ===');
+  console.log('Invite code:', invite_code);
+  
+  if (!invite_code || invite_code.trim().length === 0) {
+    return new Response(
+      JSON.stringify({ error: 'Invite code required' }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // В реальном приложении здесь была бы таблица invite_codes
+  // Пока используем простую логику: если код содержит название сервера, ищем его
+  const code = invite_code.trim().toLowerCase();
+  
+  // Попытаемся найти сервер по частичному совпадению названия с кодом
+  const { data: servers, error: searchError } = await supabaseClient
+    .from('servers')
+    .select('*')
+    .or(`name.ilike.%${code}%,id.eq.${invite_code}`)
+    .limit(1);
+    
+  console.log('Found servers:', servers);
+  console.log('Search error:', searchError);
+  
+  if (searchError) {
+    console.error('Search error:', searchError);
+    throw searchError;
+  }
+  
+  if (!servers || servers.length === 0) {
+    return new Response(
+      JSON.stringify({ error: 'Invalid invite code or server not found' }),
+      { 
+        status: 404, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  const server = servers[0];
+  
+  // Проверяем, не является ли пользователь уже участником
+  const { data: existingMember } = await supabaseClient
+    .from('server_members')
+    .select('id')
+    .eq('server_id', server.id)
+    .eq('user_id', userId)
+    .single();
+    
+  if (existingMember) {
+    return new Response(
+      JSON.stringify({ error: 'Already a member of this server' }),
+      { 
+        status: 409, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // Добавляем пользователя как участника
+  const { data: member, error } = await supabaseClient
+    .from('server_members')
+    .insert({
+      server_id: server.id,
+      user_id: userId,
+      role: 'member'
+    })
+    .select()
+    .single()
+  
+  if (error) {
+    console.error('Join server error:', error);
+    throw error;
+  }
+  
+  console.log('Successfully joined server:', server.name);
+  
+  return new Response(
+    JSON.stringify({ 
+      member,
+      server: {
+        id: server.id,
+        name: server.name,
+        description: server.description
+      }
+    }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
 }

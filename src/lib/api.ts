@@ -73,6 +73,15 @@ export const api = {
     return response.member;
   },
 
+  // Присоединиться к серверу по коду приглашения
+  joinServerByInvite: async (inviteCode: string) => {
+    const response = await makeRequest('/join-by-invite', {
+      method: 'POST',
+      body: JSON.stringify({ invite_code: inviteCode }),
+    });
+    return response.member;
+  },
+
   // Поиск серверов
   searchServers: async (query: string) => {
     const response = await makeRequest('/search-servers', {
