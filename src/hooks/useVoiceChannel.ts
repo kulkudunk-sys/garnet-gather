@@ -63,29 +63,38 @@ export const useVoiceChannel = (channelId: string | null) => {
     detectVoiceActivity();
   }, [isSpeaking]);
 
-  // Обновление presence с информацией о речи
+  // Обновление presence с информацией о речи - ПРОСТОЕ РЕШЕНИЕ
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
-    if (!voicePresenceRef.current || !channelId) return;
+    if (!channelId) return;
     
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username, display_name')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
-      
-      await voicePresenceRef.current.track({
-        user_id: user.id,
-        username: username,
-        channel_id: channelId,
-        isMuted: isMuted,
-        isSpeaking: speaking,
-        joined_at: new Date().toISOString()
-      });
-    }
+    if (!user) return;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username, display_name')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+    
+    // Отправляем в глобальный presence канал для ALL серверов
+    const globalPresence = supabase.channel('global_voice_presence');
+    await globalPresence.track({
+      user_id: user.id,
+      username: username,
+      channel_id: channelId,
+      isMuted: isMuted,
+      isSpeaking: speaking,
+      joined_at: new Date().toISOString()
+    });
+    
+    console.log('Updated global voice presence:', {
+      user_id: user.id,
+      username,
+      channel_id: channelId,
+      isSpeaking: speaking
+    });
   }, [channelId, isMuted]);
 
   // Создание RTCPeerConnection для пользователя
@@ -143,26 +152,13 @@ export const useVoiceChannel = (channelId: string | null) => {
     if (!channelId || channelRef.current) return; // Предотвращаем множественные подключения
 
     try {
-      console.log('Connecting to voice channel:', channelId);
+      console.log('=== CONNECTING TO VOICE CHANNEL ===');
+      console.log('Channel ID:', channelId);
       
-      // Извлекаем server ID из channel ID (предполагаем формат server_id)
-      const serverId = channelId.includes('_') ? channelId.split('_')[0] : 'default';
-      console.log('Server ID for presence:', serverId);
+      // УБИРАЕМ сложную логику с отдельными presence каналами
+      // Просто подключаемся к голосовому каналу
       
-      // Создаем общий presence канал для отображения в sidebar
-      const voicePresence = supabase.channel(`voice_channels_${serverId}`)
-        .on('presence', { event: 'sync' }, () => {
-          console.log('Voice presence sync for sidebar');
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('Voice presence channel subscribed for sidebar');
-          }
-        });
-      
-      voicePresenceRef.current = voicePresence;
-      
-      // Получаем доступ к микрофону и настраиваем VAD
+      // Получаем доступ к микрофону
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -282,21 +278,13 @@ export const useVoiceChannel = (channelId: string | null) => {
                 joined_at: new Date().toISOString()
               });
               
+              console.log('=== VOICE CHANNEL SUBSCRIBED ===');
               console.log('Track result:', trackResult);
               setIsConnected(true);
               
-              // Также отправляем в общий presence канал для sidebar
-              if (voicePresenceRef.current) {
-                console.log('Tracking presence for sidebar');
-                await voicePresenceRef.current.track({
-                  user_id: user.id,
-                  username: username,
-                  channel_id: channelId,
-                  isMuted: isMuted,
-                  isSpeaking: false,
-                  joined_at: new Date().toISOString()
-                });
-              }
+              // СРАЗУ обновляем глобальный presence
+              console.log('Updating global presence...');
+              await updateVoicePresence(false);
             }
           } else if (status === 'CHANNEL_ERROR') {
             console.error('Channel error occurred');
@@ -337,10 +325,9 @@ export const useVoiceChannel = (channelId: string | null) => {
       channelRef.current = null;
     }
     
-    if (voicePresenceRef.current) {
-      voicePresenceRef.current.unsubscribe();
-      voicePresenceRef.current = null;
-    }
+    // Очищаем глобальный presence
+    const globalPresence = supabase.channel('global_voice_presence');
+    globalPresence.untrack();
     
     setIsConnected(false);
     setIsRecording(false);
@@ -442,10 +429,9 @@ export const useVoiceChannel = (channelId: string | null) => {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
-      if (voicePresenceRef.current) {
-        voicePresenceRef.current.unsubscribe();
-        voicePresenceRef.current = null;
-      }
+      // Очищаем глобальный presence при выходе
+      const globalPresence = supabase.channel('global_voice_presence');
+      globalPresence.untrack();
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);

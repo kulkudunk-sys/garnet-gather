@@ -18,7 +18,7 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
   const { user } = useAuth();
   const [channels, setChannels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { onlineUsers: voiceChannelUsers } = useRealtimePresence(`voice_channels_${serverId}`);
+  const { onlineUsers: voiceChannelUsers } = useRealtimePresence('global_voice_presence');
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -40,12 +40,15 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
 
   // Функция для получения пользователей в определенном голосовом канале
   const getUsersInVoiceChannel = (channelId: string) => {
+    console.log('=== GETTING USERS FOR CHANNEL ===');
     console.log('All voice users:', voiceChannelUsers);
     console.log('Looking for channel:', channelId);
-    return voiceChannelUsers.filter((u: any) => {
-      console.log('User channel_id:', u.channel_id, 'Target:', channelId);
+    const users = voiceChannelUsers.filter((u: any) => {
+      console.log('User:', u.username, 'Channel:', u.channel_id, 'Match:', u.channel_id === channelId);
       return u.channel_id === channelId;
     });
+    console.log('Found users:', users);
+    return users;
   };
 
   return (
