@@ -132,11 +132,17 @@ export default function Auth() {
               <form 
                 className="space-y-4" 
                 noValidate
-                onSubmit={(e) => {
-                  console.log('=== FORM SUBMIT EVENT ===');
-                  console.log('Event:', e);
-                  handleSubmit(handleSignIn)(e);
-                }}
+                onSubmit={handleSubmit(
+                  (data) => {
+                    console.log('=== FORM VALIDATION SUCCESS ===');
+                    console.log('Valid data:', data);
+                    handleSignIn(data);
+                  },
+                  (errors) => {
+                    console.log('=== FORM VALIDATION ERRORS ===');
+                    console.log('Validation errors:', errors);
+                  }
+                )}
               >
                 <div className="space-y-2">
                   <Input
