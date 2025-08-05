@@ -22,7 +22,8 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<AuthFormData>();
+  const signInForm = useForm<AuthFormData>();
+  const signUpForm = useForm<AuthFormData>();
 
   useEffect(() => {
     // Set up auth state listener
@@ -70,7 +71,7 @@ export default function Auth() {
         setError(error.message);
       } else {
         setMessage('Проверьте вашу электронную почту для подтверждения аккаунта');
-        reset();
+        signUpForm.reset();
       }
     } catch (err) {
       setError('Произошла непредвиденная ошибка');
@@ -132,14 +133,14 @@ export default function Auth() {
               <form 
                 className="space-y-4" 
                 noValidate
-                onSubmit={handleSubmit(
+                onSubmit={signInForm.handleSubmit(
                   (data) => {
-                    console.log('=== FORM VALIDATION SUCCESS ===');
+                    console.log('=== SIGNIN VALIDATION SUCCESS ===');
                     console.log('Valid data:', data);
                     handleSignIn(data);
                   },
                   (errors) => {
-                    console.log('=== FORM VALIDATION ERRORS ===');
+                    console.log('=== SIGNIN VALIDATION ERRORS ===');
                     console.log('Validation errors:', errors);
                   }
                 )}
@@ -148,10 +149,10 @@ export default function Auth() {
                   <Input
                     type="email"
                     placeholder="Email"
-                    {...register('email', { required: 'Email обязателен' })}
+                    {...signInForm.register('email', { required: 'Email обязателен' })}
                   />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
+                  {signInForm.formState.errors.email && (
+                    <p className="text-sm text-destructive">{signInForm.formState.errors.email.message}</p>
                   )}
                 </div>
                 
@@ -159,10 +160,10 @@ export default function Auth() {
                   <Input
                     type="password"
                     placeholder="Пароль"
-                    {...register('password', { required: 'Пароль обязателен' })}
+                    {...signInForm.register('password', { required: 'Пароль обязателен' })}
                   />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password.message}</p>
+                  {signInForm.formState.errors.password && (
+                    <p className="text-sm text-destructive">{signInForm.formState.errors.password.message}</p>
                   )}
                 </div>
                 
@@ -171,8 +172,8 @@ export default function Auth() {
                   className="w-full" 
                   disabled={loading}
                   onClick={(e) => {
-                    console.log('=== BUTTON CLICKED ===');
-                    console.log('Form errors:', errors);
+                    console.log('=== SIGNIN BUTTON CLICKED ===');
+                    console.log('Form errors:', signInForm.formState.errors);
                     console.log('Loading state:', loading);
                   }}
                 >
@@ -183,15 +184,15 @@ export default function Auth() {
             </TabsContent>
             
             <TabsContent value="signup" className="space-y-4">
-              <form onSubmit={handleSubmit(handleSignUp)} className="space-y-4">
+              <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="space-y-4">
                 <div className="space-y-2">
                   <Input
                     type="text"
                     placeholder="Имя пользователя"
-                    {...register('username', { required: 'Имя пользователя обязательно' })}
+                    {...signUpForm.register('username', { required: 'Имя пользователя обязательно' })}
                   />
-                  {errors.username && (
-                    <p className="text-sm text-destructive">{errors.username.message}</p>
+                  {signUpForm.formState.errors.username && (
+                    <p className="text-sm text-destructive">{signUpForm.formState.errors.username.message}</p>
                   )}
                 </div>
                 
@@ -199,7 +200,7 @@ export default function Auth() {
                   <Input
                     type="text"
                     placeholder="Отображаемое имя"
-                    {...register('displayName')}
+                    {...signUpForm.register('displayName')}
                   />
                 </div>
                 
@@ -207,10 +208,10 @@ export default function Auth() {
                   <Input
                     type="email"
                     placeholder="Email"
-                    {...register('email', { required: 'Email обязателен' })}
+                    {...signUpForm.register('email', { required: 'Email обязателен' })}
                   />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
+                  {signUpForm.formState.errors.email && (
+                    <p className="text-sm text-destructive">{signUpForm.formState.errors.email.message}</p>
                   )}
                 </div>
                 
@@ -218,13 +219,13 @@ export default function Auth() {
                   <Input
                     type="password"
                     placeholder="Пароль (минимум 6 символов)"
-                    {...register('password', { 
+                    {...signUpForm.register('password', { 
                       required: 'Пароль обязателен',
                       minLength: { value: 6, message: 'Пароль должен содержать минимум 6 символов' }
                     })}
                   />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password.message}</p>
+                  {signUpForm.formState.errors.password && (
+                    <p className="text-sm text-destructive">{signUpForm.formState.errors.password.message}</p>
                   )}
                 </div>
                 
