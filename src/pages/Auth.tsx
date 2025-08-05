@@ -25,6 +25,15 @@ export default function Auth() {
   const { register, handleSubmit, formState: { errors }, reset } = useForm<AuthFormData>();
 
   useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          navigate('/');
+        }
+      }
+    );
+
     // Check if user is already logged in
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -33,6 +42,8 @@ export default function Auth() {
       }
     };
     checkUser();
+
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleSignUp = async (data: AuthFormData) => {
