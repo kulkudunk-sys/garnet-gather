@@ -199,8 +199,17 @@ export const useVoiceChannel = (channelId: string | null) => {
       // Просто подключаемся к голосовому каналу
       
       // Проверяем доступность медиа устройств
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('getUserMedia is not supported in this browser or context. Please use HTTPS or a modern browser.');
+      if (!navigator.mediaDevices) {
+        throw new Error('MediaDevices API недоступен. Убедитесь, что вы используете HTTPS или localhost.');
+      }
+      
+      if (!navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia не поддерживается в этом браузере. Обновите браузер до последней версии.');
+      }
+
+      // Проверяем протокол
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        throw new Error('Голосовые каналы работают только через HTTPS или на localhost. Текущий протокол: ' + location.protocol);
       }
       
       // Получаем доступ к микрофону
