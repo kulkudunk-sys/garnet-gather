@@ -77,19 +77,34 @@ export function useRealtimePresence(roomId: string) {
   useEffect(() => {
     if (!roomId) return;
 
+    console.log('=== REALTIME PRESENCE SETUP ===');
+    console.log('Room ID:', roomId);
+
     const presenceChannel = supabase.channel(`presence:${roomId}`)
       .on('presence', { event: 'sync' }, () => {
         const newState = presenceChannel.presenceState();
         const users = Object.values(newState).flat();
+        console.log('=== PRESENCE SYNC ===');
+        console.log('Room:', roomId);
+        console.log('Users count:', users.length);
+        console.log('Users:', users);
         setOnlineUsers(users as any[]);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('=== USER JOINED PRESENCE ===');
+        console.log('Room:', roomId);
         console.log('User joined:', key, newPresences);
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('=== USER LEFT PRESENCE ===');
+        console.log('Room:', roomId);
         console.log('User left:', key, leftPresences);
       })
       .subscribe(async (status) => {
+        console.log('=== PRESENCE SUBSCRIPTION STATUS ===');
+        console.log('Room:', roomId);
+        console.log('Status:', status);
+        
         if (status === 'SUBSCRIBED') {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
@@ -98,6 +113,7 @@ export function useRealtimePresence(roomId: string) {
               email: user.email,
               online_at: new Date().toISOString(),
             };
+            console.log('Tracking user in presence:', userStatus);
             await presenceChannel.track(userStatus);
           }
         }

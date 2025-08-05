@@ -63,7 +63,7 @@ export const useVoiceChannel = (channelId: string | null) => {
     detectVoiceActivity();
   }, [isSpeaking]);
 
-  // Обновление presence с информацией о речи - ПРОСТОЕ РЕШЕНИЕ
+  // ПРОСТОЕ И РАБОЧЕЕ обновление presence
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
     if (!channelId) return;
     
@@ -78,23 +78,27 @@ export const useVoiceChannel = (channelId: string | null) => {
     
     const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
     
-    // Отправляем в глобальный presence канал для ALL серверов
-    const globalPresence = supabase.channel('global_voice_presence');
-    await globalPresence.track({
+    // ПРЯМОЕ подключение к presence каналу
+    if (!voicePresenceRef.current) {
+      console.log('Creating voice presence channel...');
+      voicePresenceRef.current = supabase.channel('global_voice_presence');
+      await voicePresenceRef.current.subscribe();
+    }
+    
+    // Отправляем данные о пользователе
+    const presenceData = {
       user_id: user.id,
       username: username,
       channel_id: channelId,
       isMuted: isMuted,
       isSpeaking: speaking,
       joined_at: new Date().toISOString()
-    });
+    };
     
-    console.log('Updated global voice presence:', {
-      user_id: user.id,
-      username,
-      channel_id: channelId,
-      isSpeaking: speaking
-    });
+    console.log('=== TRACKING VOICE PRESENCE ===');
+    console.log('Presence data:', presenceData);
+    
+    await voicePresenceRef.current.track(presenceData);
   }, [channelId, isMuted]);
 
   // Создание RTCPeerConnection для пользователя
@@ -279,12 +283,15 @@ export const useVoiceChannel = (channelId: string | null) => {
               });
               
               console.log('=== VOICE CHANNEL SUBSCRIBED ===');
-              console.log('Track result:', trackResult);
+              console.log('User ID:', user.id);
+              console.log('Channel ID:', channelId);
               setIsConnected(true);
               
-              // СРАЗУ обновляем глобальный presence
-              console.log('Updating global presence...');
-              await updateVoicePresence(false);
+              // НЕМЕДЛЕННО обновляем presence
+              console.log('Immediately updating voice presence...');
+              setTimeout(() => {
+                updateVoicePresence(false);
+              }, 1000); // Даем секунду на подключение
             }
           } else if (status === 'CHANNEL_ERROR') {
             console.error('Channel error occurred');
