@@ -43,11 +43,21 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
     console.log('=== SIDEBAR: GETTING USERS FOR CHANNEL ===');
     console.log('Channel ID:', channelId);
     console.log('All voice users count:', voiceChannelUsers.length);
-    console.log('All voice users:', voiceChannelUsers);
+    
+    // ПОДРОБНО логируем каждого пользователя
+    voiceChannelUsers.forEach((user, index) => {
+      console.log(`User ${index}:`, {
+        user_id: user.user_id,
+        username: user.username,
+        channel_id: user.channel_id,
+        isMuted: user.isMuted,
+        isSpeaking: user.isSpeaking
+      });
+    });
     
     const users = voiceChannelUsers.filter((u: any) => {
       const match = u.channel_id === channelId;
-      console.log(`User ${u.username} in channel ${u.channel_id}, match: ${match}`);
+      console.log(`User ${u.username || u.user_id} in channel ${u.channel_id}, looking for ${channelId}, match: ${match}`);
       return match;
     });
     
