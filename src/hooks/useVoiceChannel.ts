@@ -46,9 +46,13 @@ export const useVoiceChannel = (channelId: string | null) => {
       analyserRef.current.getByteFrequencyData(dataArray);
       const volume = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
       
-      const speaking = volume > 20; // Threshold for speaking detection
+      // Более чувствительный порог для детекции речи
+      const speaking = volume > 10; 
+      
+      console.log('Voice activity - Volume:', volume, 'Speaking:', speaking);
       
       if (speaking !== isSpeaking) {
+        console.log('Speech state changed:', speaking);
         setIsSpeaking(speaking);
         updateVoicePresence(speaking);
       }
@@ -141,18 +145,22 @@ export const useVoiceChannel = (channelId: string | null) => {
     try {
       console.log('Connecting to voice channel:', channelId);
       
-      // Создаем общий presence канал для отображения в sidebar
-      const serverId = channelId.split('_')[0]; // Извлекаем server ID из channel ID
-      const voicePresence = supabase.channel(`voice_channels_${serverId}`, {
-        config: {
-          presence: {
-            key: 'user_id'
-          }
-        }
-      });
-      voicePresenceRef.current = voicePresence;
+      // Извлекаем server ID из channel ID (предполагаем формат server_id)
+      const serverId = channelId.includes('_') ? channelId.split('_')[0] : 'default';
+      console.log('Server ID for presence:', serverId);
       
-      await voicePresence.subscribe();
+      // Создаем общий presence канал для отображения в sidebar
+      const voicePresence = supabase.channel(`voice_channels_${serverId}`)
+        .on('presence', { event: 'sync' }, () => {
+          console.log('Voice presence sync for sidebar');
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Voice presence channel subscribed for sidebar');
+          }
+        });
+      
+      voicePresenceRef.current = voicePresence;
       
       // Получаем доступ к микрофону и настраиваем VAD
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -277,8 +285,18 @@ export const useVoiceChannel = (channelId: string | null) => {
               console.log('Track result:', trackResult);
               setIsConnected(true);
               
-              // Также отправляем в общий presence канал
-              await updateVoicePresence(false);
+              // Также отправляем в общий presence канал для sidebar
+              if (voicePresenceRef.current) {
+                console.log('Tracking presence for sidebar');
+                await voicePresenceRef.current.track({
+                  user_id: user.id,
+                  username: username,
+                  channel_id: channelId,
+                  isMuted: isMuted,
+                  isSpeaking: false,
+                  joined_at: new Date().toISOString()
+                });
+              }
             }
           } else if (status === 'CHANNEL_ERROR') {
             console.error('Channel error occurred');

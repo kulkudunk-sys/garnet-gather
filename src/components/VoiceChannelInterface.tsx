@@ -18,6 +18,7 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
     isConnected,
     isRecording,
     isMuted,
+    isSpeaking,
     connectedUsers,
     disconnectFromVoiceChannel,
     toggleMute
@@ -87,8 +88,13 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
           <Badge variant="default" className="animate-pulse">
             🔊 Подключен к голосовому каналу
           </Badge>
-          {isRecording && !isMuted && (
-            <Badge variant="default" className="animate-pulse">
+          {isSpeaking && (
+            <Badge variant="default" className="animate-pulse bg-green-600">
+              🎤 Вы говорите
+            </Badge>
+          )}
+          {isRecording && !isMuted && !isSpeaking && (
+            <Badge variant="secondary">
               🎤 Микрофон активен
             </Badge>
           )}
@@ -123,13 +129,13 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
                   className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50"
                 >
                   <div className="relative">
-                    <Avatar className="w-10 h-10">
+                    <Avatar className={`w-10 h-10 ${user.isSpeaking ? 'ring-4 ring-green-500 ring-offset-2 ring-offset-background animate-pulse' : ''}`}>
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {user.username.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     {user.isSpeaking && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-background rounded-full animate-pulse" />
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 border-2 border-background rounded-full animate-pulse" />
                     )}
                   </div>
                   

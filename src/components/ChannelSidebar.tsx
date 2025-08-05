@@ -40,7 +40,12 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
 
   // Функция для получения пользователей в определенном голосовом канале
   const getUsersInVoiceChannel = (channelId: string) => {
-    return voiceChannelUsers.filter((u: any) => u.channel_id === channelId);
+    console.log('All voice users:', voiceChannelUsers);
+    console.log('Looking for channel:', channelId);
+    return voiceChannelUsers.filter((u: any) => {
+      console.log('User channel_id:', u.channel_id, 'Target:', channelId);
+      return u.channel_id === channelId;
+    });
   };
 
   return (
