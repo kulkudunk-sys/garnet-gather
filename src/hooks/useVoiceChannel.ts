@@ -533,8 +533,16 @@ export const useVoiceChannel = (channelId: string | null) => {
   }, [connectedUsers, createPeerConnection]);
 
   useEffect(() => {
+    console.log('=== EFFECT: isConnected changed ===', isConnected);
+    console.log('Connected users count:', connectedUsers.length);
+    
     if (isConnected && connectedUsers.length > 1) {
-      initiateConnections();
+      console.log('Triggering initiate connections...');
+      // Небольшая задержка для стабилизации соединений
+      setTimeout(() => {
+        console.log('Executing initiate connections after delay');
+        initiateConnections();
+      }, 2000);
     }
   }, [isConnected, connectedUsers, initiateConnections]);
 
