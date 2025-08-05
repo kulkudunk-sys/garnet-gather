@@ -398,11 +398,23 @@ export const useVoiceChannel = (channelId: string | null) => {
               console.log('Channel ID:', channelId);
               setIsConnected(true);
               
-              // НЕМЕДЛЕННО обновляем presence
-              console.log('Immediately updating voice presence...');
-              setTimeout(() => {
-                updateVoicePresence(false);
-              }, 1000); // Даем секунду на подключение
+              // ПРИНУДИТЕЛЬНО создаем connections через 3 секунды
+              console.log('Setting up forced peer connection creation...');
+              setTimeout(async () => {
+                console.log('=== FORCING PEER CONNECTIONS CREATION ===');
+                const currentState = channel.presenceState();
+                console.log('Current presence state:', currentState);
+                
+                const allUsers = Object.values(currentState).flat();
+                console.log('All users from state:', allUsers);
+                
+                for (const presence of allUsers as any[]) {
+                  if (presence.user_id !== user.id) {
+                    console.log('Force creating peer connection for:', presence.user_id);
+                    await createPeerConnection(presence.user_id);
+                  }
+                }
+              }, 3000);
             }
           } else if (status === 'CHANNEL_ERROR') {
             console.error('Channel error occurred');
