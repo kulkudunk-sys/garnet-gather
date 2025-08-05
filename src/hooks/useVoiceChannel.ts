@@ -198,6 +198,11 @@ export const useVoiceChannel = (channelId: string | null) => {
       // УБИРАЕМ сложную логику с отдельными presence каналами
       // Просто подключаемся к голосовому каналу
       
+      // Проверяем доступность медиа устройств
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser or context. Please use HTTPS or a modern browser.');
+      }
+      
       // Получаем доступ к микрофону
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
