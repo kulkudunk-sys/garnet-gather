@@ -270,17 +270,30 @@ export const useVoiceChannel = (channelId: string | null) => {
 
       // Создаем канал для сигналинга
       const channel = supabase.channel(`voice_channel_${channelId}`)
-        .on('presence', { event: 'sync' }, () => {
+        .on('presence', { event: 'sync' }, async () => {
           const state = channel.presenceState();
-          console.log('Voice channel presence sync:', state);
+          console.log('=== VOICE CHANNEL PRESENCE SYNC ===');
+          console.log('Presence state:', state);
+          
           const users: VoiceUser[] = Object.values(state).flat().map((presence: any) => ({
             user_id: presence.user_id,
             username: presence.username,
             isMuted: presence.isMuted || false,
             isSpeaking: false
           }));
-          console.log('Connected users:', users);
+          console.log('Connected users from sync:', users);
           setConnectedUsers(users);
+          
+          // СОЗДАЕМ PEER CONNECTIONS ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          console.log('Current user in sync:', currentUser?.id);
+          
+          for (const user of users) {
+            if (user.user_id !== currentUser?.id && !peersRef.current.has(user.user_id)) {
+              console.log('Creating peer connection for existing user:', user.user_id);
+              await createPeerConnection(user.user_id);
+            }
+          }
         })
         .on('presence', { event: 'join' }, async ({ newPresences }) => {
           console.log('=== USER JOINED VOICE CHANNEL ===');
