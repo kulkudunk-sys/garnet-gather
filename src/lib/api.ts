@@ -82,6 +82,30 @@ export const api = {
     return response.member;
   },
 
+  // Создать приглашение на сервер
+  createServerInvite: async (serverId: string, options?: { maxUses?: number; expiresAt?: string }) => {
+    const response = await makeRequest('/create-invite', {
+      method: 'POST',
+      body: JSON.stringify({ server_id: serverId, ...options }),
+    });
+    return response.invite;
+  },
+
+  // Получить приглашения сервера
+  getServerInvites: async (serverId: string) => {
+    const response = await makeRequest(`/invites?server_id=${serverId}`);
+    return response.invites || [];
+  },
+
+  // Отключить приглашение
+  deactivateInvite: async (inviteId: string) => {
+    const response = await makeRequest(`/invites/${inviteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: false }),
+    });
+    return response.invite;
+  },
+
   // Поиск серверов
   searchServers: async (query: string) => {
     const response = await makeRequest('/search-servers', {

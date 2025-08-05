@@ -1,4 +1,4 @@
-import { Hash, Volume2, Settings, ChevronDown, Plus, UserPlus } from "lucide-react";
+import { Hash, Volume2, Settings, ChevronDown, Plus, UserPlus, Link } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { getVoicePresenceChannel } from "@/lib/voicePresenceManager";
+import ServerInviteManager from "./ServerInviteManager";
 
 interface ChannelSidebarProps {
   serverId: string;
@@ -87,7 +88,10 @@ export const ChannelSidebar = ({ serverId, serverName, activeChannel, onChannelC
       {/* Server Header */}
       <div className="h-16 px-4 border-b border-border flex items-center justify-between hover:bg-discord-channel-hover cursor-pointer">
         <h2 className="font-semibold text-foreground">{serverName}</h2>
-        <ChevronDown className="h-4 w-4 text-discord-channel-text" />
+        <div className="flex items-center gap-1">
+          <ServerInviteManager serverId={serverId} serverName={serverName} />
+          <ChevronDown className="h-4 w-4 text-discord-channel-text" />
+        </div>
       </div>
 
       {/* Channels */}

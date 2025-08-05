@@ -53,6 +53,12 @@ serve(async (req) => {
       case 'join-by-invite':
         return await handleJoinByInvite(req, supabaseClient, user.id)
       
+      case 'create-invite':
+        return await handleCreateInvite(req, supabaseClient, user.id)
+      
+      case 'invites':
+        return await handleInvites(req, supabaseClient, user.id)
+      
       case 'search-servers':
         return await handleSearchServers(req, supabaseClient, user.id)
       
@@ -491,28 +497,24 @@ async function handleJoinByInvite(req: Request, supabaseClient: any, userId: str
     )
   }
   
-  // В реальном приложении здесь была бы таблица invite_codes
-  // Пока используем простую логику: если код содержит название сервера, ищем его
-  const code = invite_code.trim().toLowerCase();
-  
-  // Попытаемся найти сервер по частичному совпадению названия с кодом
-  const { data: servers, error: searchError } = await supabaseClient
-    .from('servers')
-    .select('*')
-    .or(`name.ilike.%${code}%,id.eq.${invite_code}`)
-    .limit(1);
+  // Ищем приглашение по коду
+  const { data: invite, error: inviteError } = await supabaseClient
+    .from('server_invites')
+    .select(`
+      *,
+      servers(id, name, description)
+    `)
+    .eq('code', invite_code.trim().toUpperCase())
+    .eq('is_active', true)
+    .single()
     
-  console.log('Found servers:', servers);
-  console.log('Search error:', searchError);
+  console.log('Found invite:', invite);
+  console.log('Invite error:', inviteError);
   
-  if (searchError) {
-    console.error('Search error:', searchError);
-    throw searchError;
-  }
-  
-  if (!servers || servers.length === 0) {
+  if (inviteError || !invite) {
+    console.error('Invite lookup error:', inviteError);
     return new Response(
-      JSON.stringify({ error: 'Invalid invite code or server not found' }),
+      JSON.stringify({ error: 'Invalid or expired invite code' }),
       { 
         status: 404, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -520,13 +522,33 @@ async function handleJoinByInvite(req: Request, supabaseClient: any, userId: str
     )
   }
   
-  const server = servers[0];
+  // Проверяем срок действия
+  if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+    return new Response(
+      JSON.stringify({ error: 'Invite code has expired' }),
+      { 
+        status: 410, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // Проверяем лимит использований
+  if (invite.max_uses && invite.used_count >= invite.max_uses) {
+    return new Response(
+      JSON.stringify({ error: 'Invite code has reached maximum uses' }),
+      { 
+        status: 410, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
   
   // Проверяем, не является ли пользователь уже участником
   const { data: existingMember } = await supabaseClient
     .from('server_members')
     .select('id')
-    .eq('server_id', server.id)
+    .eq('server_id', invite.servers.id)
     .eq('user_id', userId)
     .single();
     
@@ -544,7 +566,7 @@ async function handleJoinByInvite(req: Request, supabaseClient: any, userId: str
   const { data: member, error } = await supabaseClient
     .from('server_members')
     .insert({
-      server_id: server.id,
+      server_id: invite.servers.id,
       user_id: userId,
       role: 'member'
     })
@@ -556,17 +578,217 @@ async function handleJoinByInvite(req: Request, supabaseClient: any, userId: str
     throw error;
   }
   
-  console.log('Successfully joined server:', server.name);
+  // Увеличиваем счетчик использований приглашения
+  await supabaseClient
+    .from('server_invites')
+    .update({ used_count: invite.used_count + 1 })
+    .eq('id', invite.id);
+  
+  console.log('Successfully joined server:', invite.servers.name);
   
   return new Response(
     JSON.stringify({ 
       member,
-      server: {
-        id: server.id,
-        name: server.name,
-        description: server.description
-      }
+      server: invite.servers
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
+async function handleCreateInvite(req: Request, supabaseClient: any, userId: string) {
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { 
+        status: 405, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  const { server_id, max_uses, expires_at } = await req.json()
+  
+  console.log('=== CREATE INVITE ===');
+  console.log('Server ID:', server_id);
+  console.log('Max uses:', max_uses);
+  console.log('Expires at:', expires_at);
+  
+  if (!server_id) {
+    return new Response(
+      JSON.stringify({ error: 'Server ID required' }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // Проверяем, является ли пользователь участником сервера
+  const { data: member } = await supabaseClient
+    .from('server_members')
+    .select('role')
+    .eq('server_id', server_id)
+    .eq('user_id', userId)
+    .single();
+    
+  if (!member) {
+    return new Response(
+      JSON.stringify({ error: 'Not a member of this server' }),
+      { 
+        status: 403, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // Генерируем уникальный код
+  let inviteCode;
+  let attempts = 0;
+  do {
+    const { data: code, error } = await supabaseClient.rpc('generate_invite_code');
+    if (error) throw error;
+    inviteCode = code;
+    
+    // Проверяем уникальность
+    const { data: existing } = await supabaseClient
+      .from('server_invites')
+      .select('id')
+      .eq('code', inviteCode)
+      .single();
+      
+    if (!existing) break;
+    attempts++;
+  } while (attempts < 10);
+  
+  if (attempts >= 10) {
+    return new Response(
+      JSON.stringify({ error: 'Failed to generate unique invite code' }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  // Создаем приглашение
+  const { data: invite, error } = await supabaseClient
+    .from('server_invites')
+    .insert({
+      server_id,
+      code: inviteCode,
+      created_by: userId,
+      max_uses: max_uses || null,
+      expires_at: expires_at || null
+    })
+    .select(`
+      *,
+      servers(name),
+      profiles(username, display_name)
+    `)
+    .single();
+    
+  if (error) {
+    console.error('Create invite error:', error);
+    throw error;
+  }
+  
+  console.log('Invite created successfully:', inviteCode);
+  
+  return new Response(
+    JSON.stringify({ invite }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
+async function handleInvites(req: Request, supabaseClient: any, userId: string) {
+  const url = new URL(req.url)
+  const serverId = url.searchParams.get('server_id')
+  
+  if (req.method === 'GET') {
+    if (!serverId) {
+      return new Response(
+        JSON.stringify({ error: 'Server ID required' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    // Проверяем права доступа к серверу
+    const { data: member } = await supabaseClient
+      .from('server_members')
+      .select('role')
+      .eq('server_id', serverId)
+      .eq('user_id', userId)
+      .single();
+      
+    if (!member) {
+      return new Response(
+        JSON.stringify({ error: 'Not a member of this server' }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    // Получаем приглашения сервера
+    const { data: invites, error } = await supabaseClient
+      .from('server_invites')
+      .select(`
+        *,
+        profiles(username, display_name)
+      `)
+      .eq('server_id', serverId)
+      .order('created_at', { ascending: false });
+      
+    if (error) throw error;
+    
+    return new Response(
+      JSON.stringify({ invites }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+  
+  // PATCH для обновления приглашения
+  if (req.method === 'PATCH') {
+    const pathSegments = url.pathname.split('/').filter(segment => segment !== '')
+    const inviteId = pathSegments[pathSegments.length - 1]
+    
+    if (!inviteId) {
+      return new Response(
+        JSON.stringify({ error: 'Invite ID required' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    const { is_active } = await req.json()
+    
+    const { data: invite, error } = await supabaseClient
+      .from('server_invites')
+      .update({ is_active })
+      .eq('id', inviteId)
+      .eq('created_by', userId)
+      .select()
+      .single();
+      
+    if (error) throw error;
+    
+    return new Response(
+      JSON.stringify({ invite }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+  
+  return new Response(
+    JSON.stringify({ error: 'Method not allowed' }),
+    { 
+      status: 405, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
   )
 }
