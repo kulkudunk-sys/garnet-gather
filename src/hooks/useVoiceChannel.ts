@@ -283,11 +283,20 @@ export const useVoiceChannel = (channelId: string | null) => {
           setConnectedUsers(users);
         })
         .on('presence', { event: 'join' }, async ({ newPresences }) => {
-          console.log('User joined voice channel:', newPresences);
+          console.log('=== USER JOINED VOICE CHANNEL ===');
+          console.log('New presences:', newPresences);
+          
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          console.log('Current user ID:', currentUser?.id);
+          
           // Создаем соединение с новым пользователем
           for (const presence of newPresences) {
-            if (presence.user_id !== (await supabase.auth.getUser()).data.user?.id) {
+            console.log('Processing presence:', presence);
+            if (presence.user_id !== currentUser?.id) {
+              console.log('Creating peer connection for user:', presence.user_id);
               await createPeerConnection(presence.user_id);
+            } else {
+              console.log('Skipping self:', presence.user_id);
             }
           }
         })
@@ -469,19 +478,32 @@ export const useVoiceChannel = (channelId: string | null) => {
 
   // Инициация соединения с другими пользователями
   const initiateConnections = useCallback(async () => {
-    if (!channelRef.current) return;
+    console.log('=== INITIATING CONNECTIONS ===');
+    
+    if (!channelRef.current) {
+      console.log('No channel reference, skipping connections');
+      return;
+    }
     
     const { data: { user: currentUser } } = await supabase.auth.getUser();
+    console.log('Current user for connections:', currentUser?.id);
+    console.log('All connected users:', connectedUsers);
+    
     const currentUsers = connectedUsers.filter((user) => {
       return user.user_id !== currentUser?.id;
     });
+    console.log('Other users to connect to:', currentUsers);
     
     for (const user of currentUsers) {
+      console.log('Processing user connection:', user.user_id);
+      
       if (!peersRef.current.has(user.user_id)) {
+        console.log('Creating new peer connection and offer for:', user.user_id);
         const pc = await createPeerConnection(user.user_id);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
+        console.log('Sending offer to:', user.user_id);
         channelRef.current.send({
           type: 'broadcast',
           event: 'offer',
@@ -491,6 +513,8 @@ export const useVoiceChannel = (channelId: string | null) => {
             to: user.user_id
           }
         });
+      } else {
+        console.log('Peer connection already exists for:', user.user_id);
       }
     }
   }, [connectedUsers, createPeerConnection]);
