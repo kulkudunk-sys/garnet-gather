@@ -50,6 +50,9 @@ serve(async (req) => {
       case 'join-server':
         return await handleJoinServer(req, supabaseClient, user.id)
       
+      case 'search-servers':
+        return await handleSearchServers(req, supabaseClient, user.id)
+      
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action' }),
@@ -371,6 +374,65 @@ async function handleJoinServer(req: Request, supabaseClient: any, userId: strin
   
   return new Response(
     JSON.stringify({ member }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
+async function handleSearchServers(req: Request, supabaseClient: any, userId: string) {
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { 
+        status: 405, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+  
+  const { query } = await req.json()
+  
+  if (!query || query.trim().length === 0) {
+    return new Response(
+      JSON.stringify({ servers: [] }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+  
+  // Поиск серверов по имени (case-insensitive)
+  const { data: allServers, error: serversError } = await supabaseClient
+    .from('servers')
+    .select(`
+      *,
+      server_members!left(role),
+      member_count:server_members(count)
+    `)
+    .ilike('name', `%${query.trim()}%`)
+    .limit(20)
+  
+  if (serversError) throw serversError
+  
+  // Получаем информацию о том, является ли пользователь участником каждого сервера
+  const serverIds = allServers.map(server => server.id)
+  const { data: userMemberships } = await supabaseClient
+    .from('server_members')
+    .select('server_id')
+    .eq('user_id', userId)
+    .in('server_id', serverIds)
+  
+  const userServerIds = new Set(userMemberships?.map(m => m.server_id) || [])
+  
+  // Форматируем результаты
+  const servers = allServers.map(server => ({
+    id: server.id,
+    name: server.name,
+    description: server.description,
+    icon_url: server.icon_url,
+    member_count: server.member_count?.[0]?.count || 0,
+    is_member: userServerIds.has(server.id)
+  }))
+  
+  return new Response(
+    JSON.stringify({ servers }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
 }

@@ -72,4 +72,13 @@ export const api = {
     });
     return response.member;
   },
+
+  // Поиск серверов
+  searchServers: async (query: string) => {
+    const response = await makeRequest('/search-servers', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+    return response.servers || [];
+  },
 };

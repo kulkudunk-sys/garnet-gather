@@ -1,9 +1,10 @@
-import { Home, Plus, Hash } from "lucide-react";
+import { Home, Plus, Hash, Search } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { CreateServerDialog } from "./CreateServerDialog";
+import JoinServerDialog from "./JoinServerDialog";
 
 interface ServerSidebarProps {
   activeServer: string;
@@ -37,6 +38,19 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
   const handleServerCreated = (newServer: any) => {
     setServers(prevServers => [...prevServers, newServer]);
     onServerChange(newServer.id);
+  };
+
+  const handleServerJoined = async () => {
+    // Перезагружаем список серверов после присоединения
+    try {
+      const serversData = await api.getServers();
+      setServers([
+        { id: "home", name: "Личные сообщения", icon: Home, isHome: true },
+        ...serversData
+      ]);
+    } catch (error) {
+      console.error("Ошибка загрузки серверов:", error);
+    }
   };
 
   return (
@@ -104,7 +118,16 @@ export const ServerSidebar = ({ activeServer, onServerChange }: ServerSidebarPro
         </Button>
         
         <div className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-          Добавить сервер
+          Создать сервер
+        </div>
+      </div>
+
+      {/* Join server button */}
+      <div className="relative group">
+        <JoinServerDialog onServerJoined={handleServerJoined} />
+        
+        <div className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+          Найти сервер
         </div>
       </div>
       
