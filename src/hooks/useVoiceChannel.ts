@@ -28,6 +28,7 @@ export const useVoiceChannel = (channelId: string | null) => {
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const isSpeakingRef = useRef<boolean>(false);
 
   // ПРОСТОЕ И РАБОЧЕЕ обновление presence через глобальный менеджер
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
@@ -90,11 +91,12 @@ export const useVoiceChannel = (channelId: string | null) => {
       const isQuiet = volume < SILENCE_THRESHOLD;
       
       // Логика для определения начала речи
-      if (isLoudEnough && !isSpeaking) {
+      if (isLoudEnough && !isSpeakingRef.current) {
         if (speakingStartTime === 0) {
           speakingStartTime = currentTime;
         } else if (currentTime - speakingStartTime > MIN_SPEAKING_TIME) {
           console.log('=== STARTED SPEAKING ===', 'Volume:', volume);
+          isSpeakingRef.current = true;
           setIsSpeaking(true);
           updateVoicePresence(true);
           speakingStartTime = 0;
@@ -103,11 +105,12 @@ export const useVoiceChannel = (channelId: string | null) => {
       }
       
       // Логика для определения конца речи
-      if (isQuiet && isSpeaking) {
+      if (isQuiet && isSpeakingRef.current) {
         if (silenceStartTime === 0) {
           silenceStartTime = currentTime;
         } else if (currentTime - silenceStartTime > MIN_SILENCE_TIME) {
           console.log('=== STOPPED SPEAKING ===', 'Volume:', volume);
+          isSpeakingRef.current = false;
           setIsSpeaking(false);
           updateVoicePresence(false);
           silenceStartTime = 0;
@@ -116,10 +119,10 @@ export const useVoiceChannel = (channelId: string | null) => {
       }
       
       // Сброс таймеров если условия не выполняются
-      if (!isLoudEnough && !isSpeaking) {
+      if (!isLoudEnough && !isSpeakingRef.current) {
         speakingStartTime = 0;
       }
-      if (!isQuiet && isSpeaking) {
+      if (!isQuiet && isSpeakingRef.current) {
         silenceStartTime = 0;
       }
       
