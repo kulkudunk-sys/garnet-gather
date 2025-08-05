@@ -139,6 +139,9 @@ export const useVoiceChannel = (channelId: string | null) => {
 
   // Создание RTCPeerConnection для пользователя
   const createPeerConnection = useCallback(async (userId: string): Promise<RTCPeerConnection> => {
+    console.log('=== CREATING PEER CONNECTION ===');
+    console.log('Target user ID:', userId);
+    
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -148,39 +151,72 @@ export const useVoiceChannel = (channelId: string | null) => {
 
     // Добавляем локальный аудио поток
     if (localStream) {
+      console.log('Adding local tracks to peer connection');
       localStream.getTracks().forEach(track => {
+        console.log('Adding track:', track.kind, track.enabled);
         pc.addTrack(track, localStream);
       });
+    } else {
+      console.warn('No local stream available when creating peer connection');
     }
 
     // Обработка входящих аудио потоков
     pc.ontrack = (event) => {
-      console.log('Received remote track from:', userId);
+      console.log('=== RECEIVED REMOTE TRACK ===');
+      console.log('From user:', userId);
+      console.log('Track kind:', event.track.kind);
+      console.log('Track enabled:', event.track.enabled);
+      
       const remoteStream = event.streams[0];
       
       let audioElement = audioElementsRef.current.get(userId);
       if (!audioElement) {
+        console.log('Creating new audio element for user:', userId);
         audioElement = new Audio();
         audioElement.autoplay = true;
+        audioElement.volume = 1.0;
         audioElementsRef.current.set(userId, audioElement);
+        
+        // Добавляем обработчики событий для отладки
+        audioElement.onloadstart = () => console.log('Audio loading started for:', userId);
+        audioElement.oncanplay = () => console.log('Audio can play for:', userId);
+        audioElement.onplay = () => console.log('Audio started playing for:', userId);
+        audioElement.onerror = (e) => console.error('Audio error for:', userId, e);
       }
       
       audioElement.srcObject = remoteStream;
+      
+      // Принудительно запускаем воспроизведение
+      audioElement.play().catch(error => {
+        console.error('Failed to play audio for user:', userId, error);
+      });
     };
 
     // Обработка ICE кандидатов
-    pc.onicecandidate = (event) => {
+    pc.onicecandidate = async (event) => {
       if (event.candidate && channelRef.current) {
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log('Sending ICE candidate from:', user?.id, 'to:', userId);
+        
         channelRef.current.send({
           type: 'broadcast',
           event: 'ice-candidate',
           payload: {
             candidate: event.candidate,
-            from: supabase.auth.getUser().then(u => u.data.user?.id),
+            from: user?.id,
             to: userId
           }
         });
       }
+    };
+
+    // Отладка состояния соединения
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state changed for user:', userId, 'state:', pc.connectionState);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state changed for user:', userId, 'state:', pc.iceConnectionState);
     };
 
     peersRef.current.set(userId, pc);
