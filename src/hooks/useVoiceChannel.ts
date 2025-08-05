@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { trackVoiceUser, untrackVoiceUser } from '@/lib/voicePresenceManager';
+import { useWebRTCConnections } from '@/hooks/useWebRTCConnections';
 
 interface VoiceUser {
   user_id: string;
@@ -30,6 +31,9 @@ export const useVoiceChannel = (channelId: string | null) => {
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
+
+  // Подключаем новый WebRTC хук для принудительного создания connections
+  const { peersRef: webrtcPeersRef, audioElementsRef: webrtcAudioRef } = useWebRTCConnections(channelId, connectedUsers, localStream);
 
   // ПРОСТОЕ И РАБОЧЕЕ обновление presence через глобальный менеджер
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
