@@ -80,25 +80,35 @@ export default function Auth() {
   };
 
   const handleSignIn = async (data: AuthFormData) => {
+    console.log('=== SIGN IN ATTEMPT ===');
+    console.log('Data:', data);
+    
     try {
       setLoading(true);
       setError(null);
       setMessage(null);
 
+      console.log('Calling signInWithPassword...');
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
+      console.log('SignIn result:', { error });
+
       if (error) {
+        console.error('SignIn error:', error);
         setError('Неверный email или пароль');
       } else {
+        console.log('SignIn successful, navigating to /');
         navigate('/');
       }
     } catch (err) {
+      console.error('SignIn catch error:', err);
       setError('Произошла непредвиденная ошибка');
     } finally {
       setLoading(false);
+      console.log('=== SIGN IN COMPLETE ===');
     }
   };
 
@@ -119,7 +129,7 @@ export default function Auth() {
             </TabsList>
             
             <TabsContent value="signin" className="space-y-4">
-              <form onSubmit={handleSubmit(handleSignIn)} className="space-y-4">
+              <form onSubmit={handleSubmit(handleSignIn)} className="space-y-4" noValidate>
                 <div className="space-y-2">
                   <Input
                     type="email"
