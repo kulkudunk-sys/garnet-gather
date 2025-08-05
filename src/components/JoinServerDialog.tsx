@@ -39,10 +39,14 @@ export default function JoinServerDialog({ onServerJoined }: JoinServerDialogPro
       
       // Извлекаем код из ссылки если это полная ссылка
       let code = inviteCode.trim();
-      if (code.includes('/')) {
+      if (code.includes('invite=')) {
+        const params = new URLSearchParams(code.split('?')[1] || '');
+        code = params.get('invite') || code;
+      } else if (code.includes('/')) {
         code = code.split('/').pop() || '';
       }
       
+      console.log('Trying to join with code:', code);
       await api.joinServerByInvite(code);
       
       toast({
@@ -105,7 +109,7 @@ export default function JoinServerDialog({ onServerJoined }: JoinServerDialogPro
                 <Label htmlFor="invite-code">Ссылка приглашения или код</Label>
                 <Input
                   id="invite-code"
-                  placeholder="https://discord.gg/ABC123 или ABC123"
+                  placeholder="XVFJ8QUQ или https://сайт.com/?invite=XVFJ8QUQ"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !joining && handleJoinByInvite()}
@@ -121,10 +125,10 @@ export default function JoinServerDialog({ onServerJoined }: JoinServerDialogPro
               </Button>
               
               <div className="text-xs text-muted-foreground">
-                <p>Примеры ссылок приглашения:</p>
-                <p>• https://discord.gg/ABC123</p>
-                <p>• discord.gg/ABC123</p>
-                <p>• ABC123</p>
+                <p>Примеры кодов приглашения:</p>
+                <p>• XVFJ8QUQ</p>
+                <p>• https://сайт.com/?invite=XVFJ8QUQ</p>
+                <p>• ?invite=XVFJ8QUQ</p>
               </div>
             </div>
           </TabsContent>

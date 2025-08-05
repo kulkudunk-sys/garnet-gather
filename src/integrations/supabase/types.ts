@@ -300,6 +300,7 @@ export type Database = {
           description: string | null
           icon_url: string | null
           id: string
+          is_public: boolean
           name: string
           owner_id: string
           updated_at: string
@@ -309,6 +310,7 @@ export type Database = {
           description?: string | null
           icon_url?: string | null
           id?: string
+          is_public?: boolean
           name: string
           owner_id: string
           updated_at?: string
@@ -318,6 +320,7 @@ export type Database = {
           description?: string | null
           icon_url?: string | null
           id?: string
+          is_public?: boolean
           name?: string
           owner_id?: string
           updated_at?: string

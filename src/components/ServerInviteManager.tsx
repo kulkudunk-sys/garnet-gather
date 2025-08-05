@@ -109,7 +109,7 @@ export default function ServerInviteManager({ serverId, serverName }: ServerInvi
     navigator.clipboard.writeText(inviteUrl);
     toast({
       title: "Скопировано!",
-      description: "Ссылка приглашения скопирована в буфер обмена",
+      description: `Ссылка приглашения скопирована: ${inviteUrl}`,
     });
   };
 
