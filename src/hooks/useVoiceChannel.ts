@@ -29,41 +29,6 @@ export const useVoiceChannel = (channelId: string | null) => {
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
 
-  // Voice Activity Detection
-  const setupVoiceActivityDetection = useCallback((stream: MediaStream, audioContext: AudioContext) => {
-    const analyser = audioContext.createAnalyser();
-    const microphone = audioContext.createMediaStreamSource(stream);
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    
-    analyser.smoothingTimeConstant = 0.8;
-    analyser.fftSize = 1024;
-    microphone.connect(analyser);
-    
-    analyserRef.current = analyser;
-    
-    const detectVoiceActivity = () => {
-      if (!analyserRef.current) return;
-      
-      analyserRef.current.getByteFrequencyData(dataArray);
-      const volume = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-      
-      // Более чувствительный порог для детекции речи
-      const speaking = volume > 10; 
-      
-      console.log('Voice activity - Volume:', volume, 'Speaking:', speaking);
-      
-      if (speaking !== isSpeaking) {
-        console.log('Speech state changed:', speaking);
-        setIsSpeaking(speaking);
-        updateVoicePresence(speaking);
-      }
-      
-      requestAnimationFrame(detectVoiceActivity);
-    };
-    
-    detectVoiceActivity();
-  }, [isSpeaking]);
-
   // ПРОСТОЕ И РАБОЧЕЕ обновление presence через глобальный менеджер
   const updateVoicePresence = useCallback(async (speaking: boolean) => {
     if (!channelId) return;
@@ -94,6 +59,80 @@ export const useVoiceChannel = (channelId: string | null) => {
     
     await trackVoiceUser(presenceData);
   }, [channelId, isMuted]);
+
+  // Voice Activity Detection с правильной логикой
+  const setupVoiceActivityDetection = useCallback((stream: MediaStream, audioContext: AudioContext) => {
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 1024;
+    microphone.connect(analyser);
+    
+    analyserRef.current = analyser;
+    
+    let speakingStartTime = 0;
+    let silenceStartTime = 0;
+    const SPEAKING_THRESHOLD = 3; // Понижаем порог
+    const SILENCE_THRESHOLD = 1;  // Порог для молчания
+    const MIN_SPEAKING_TIME = 300; // Минимум 300мс речи
+    const MIN_SILENCE_TIME = 800;  // Минимум 800мс молчания для отключения
+    
+    const detectVoiceActivity = () => {
+      if (!analyserRef.current) return;
+      
+      analyserRef.current.getByteFrequencyData(dataArray);
+      const volume = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+      
+      const currentTime = Date.now();
+      const isLoudEnough = volume > SPEAKING_THRESHOLD;
+      const isQuiet = volume < SILENCE_THRESHOLD;
+      
+      // Логика для определения начала речи
+      if (isLoudEnough && !isSpeaking) {
+        if (speakingStartTime === 0) {
+          speakingStartTime = currentTime;
+        } else if (currentTime - speakingStartTime > MIN_SPEAKING_TIME) {
+          console.log('=== STARTED SPEAKING ===', 'Volume:', volume);
+          setIsSpeaking(true);
+          updateVoicePresence(true);
+          speakingStartTime = 0;
+          silenceStartTime = 0;
+        }
+      }
+      
+      // Логика для определения конца речи
+      if (isQuiet && isSpeaking) {
+        if (silenceStartTime === 0) {
+          silenceStartTime = currentTime;
+        } else if (currentTime - silenceStartTime > MIN_SILENCE_TIME) {
+          console.log('=== STOPPED SPEAKING ===', 'Volume:', volume);
+          setIsSpeaking(false);
+          updateVoicePresence(false);
+          silenceStartTime = 0;
+          speakingStartTime = 0;
+        }
+      }
+      
+      // Сброс таймеров если условия не выполняются
+      if (!isLoudEnough && !isSpeaking) {
+        speakingStartTime = 0;
+      }
+      if (!isQuiet && isSpeaking) {
+        silenceStartTime = 0;
+      }
+      
+      // Логирование только каждые 50 фреймов для читаемости
+      if (Math.random() < 0.02) {
+        console.log(`Voice: ${volume.toFixed(1)} | Speaking: ${isSpeaking} | Loud: ${isLoudEnough} | Quiet: ${isQuiet}`);
+      }
+      
+      requestAnimationFrame(detectVoiceActivity);
+    };
+    
+    detectVoiceActivity();
+  }, [isSpeaking, updateVoicePresence]);
 
   // Создание RTCPeerConnection для пользователя
   const createPeerConnection = useCallback(async (userId: string): Promise<RTCPeerConnection> => {
