@@ -13,13 +13,14 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
+    // Create client for auth verification
+    const authClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
-    const { data: { user } } = await supabaseClient.auth.getUser()
+    const { data: { user } } = await authClient.auth.getUser()
     
     if (!user) {
       return new Response(
@@ -30,6 +31,18 @@ serve(async (req) => {
         }
       )
     }
+
+    // Create client with service role for database operations
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
 
     const url = new URL(req.url)
     const pathSegments = url.pathname.split('/').filter(segment => segment !== '')
