@@ -78,11 +78,12 @@ export const useVoiceChannel = (channelId: string | null) => {
     
     const username = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
     
-    // ПРЯМОЕ подключение к presence каналу
+    // ПРЯМОЕ подключение к тому же каналу что используется в sidebar
     if (!voicePresenceRef.current) {
-      console.log('Creating voice presence channel...');
-      voicePresenceRef.current = supabase.channel('global_voice_presence');
+      console.log('Creating voice presence channel for SIDEBAR...');
+      voicePresenceRef.current = supabase.channel('sidebar_voice_users');
       await voicePresenceRef.current.subscribe();
+      console.log('Voice presence channel created and subscribed!');
     }
     
     // Отправляем данные о пользователе
@@ -309,7 +310,7 @@ export const useVoiceChannel = (channelId: string | null) => {
   }, [channelId, isMuted, setupVoiceActivityDetection, updateVoicePresence]);
 
   // Отключение от голосового канала
-  const disconnectFromVoiceChannel = useCallback(() => {
+  const disconnectFromVoiceChannel = useCallback(async () => {
     // Закрываем все peer соединения
     peersRef.current.forEach(pc => pc.close());
     peersRef.current.clear();
@@ -332,9 +333,13 @@ export const useVoiceChannel = (channelId: string | null) => {
       channelRef.current = null;
     }
     
-    // Очищаем глобальный presence
-    const globalPresence = supabase.channel('global_voice_presence');
-    globalPresence.untrack();
+    // Очищаем presence для sidebar
+    if (voicePresenceRef.current) {
+      console.log('Clearing voice presence from sidebar...');
+      await voicePresenceRef.current.untrack();
+      voicePresenceRef.current.unsubscribe();
+      voicePresenceRef.current = null;
+    }
     
     setIsConnected(false);
     setIsRecording(false);
@@ -436,9 +441,12 @@ export const useVoiceChannel = (channelId: string | null) => {
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
-      // Очищаем глобальный presence при выходе
-      const globalPresence = supabase.channel('global_voice_presence');
-      globalPresence.untrack();
+      // Очищаем presence при выходе
+      if (voicePresenceRef.current) {
+        voicePresenceRef.current.untrack();
+        voicePresenceRef.current.unsubscribe();
+        voicePresenceRef.current = null;
+      }
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);
