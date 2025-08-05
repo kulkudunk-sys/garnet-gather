@@ -34,7 +34,9 @@ export const UserList = ({ serverId }: UserListProps) => {
         </h3>
         
         <div className="space-y-2">
-          {onlineUsers.map((user) => (
+          {onlineUsers
+            .filter((user, index, array) => array.findIndex(u => u.user_id === user.user_id) === index)
+            .map((user) => (
             <div
               key={user.user_id}
               className="flex items-center space-x-3 px-2 py-1 rounded hover:bg-discord-channel-hover cursor-pointer group"
