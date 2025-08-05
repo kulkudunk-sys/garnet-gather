@@ -16,6 +16,7 @@ interface VoiceChannelState {
 }
 
 export const useVoiceChannel = (channelId: string | null) => {
+  console.log('=== useVoiceChannel HOOK LOADED ===', new Date().toISOString());
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
