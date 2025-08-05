@@ -125,7 +125,7 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
             <CardContent className="space-y-3">
               {connectedUsers.map((user) => (
                 <div
-                  key={user.user_id}
+                  key={user.id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50"
                 >
                   <div className="relative">
