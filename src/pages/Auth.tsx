@@ -129,7 +129,15 @@ export default function Auth() {
             </TabsList>
             
             <TabsContent value="signin" className="space-y-4">
-              <form onSubmit={handleSubmit(handleSignIn)} className="space-y-4" noValidate>
+              <form 
+                className="space-y-4" 
+                noValidate
+                onSubmit={(e) => {
+                  console.log('=== FORM SUBMIT EVENT ===');
+                  console.log('Event:', e);
+                  handleSubmit(handleSignIn)(e);
+                }}
+              >
                 <div className="space-y-2">
                   <Input
                     type="email"
@@ -152,7 +160,16 @@ export default function Auth() {
                   )}
                 </div>
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={loading}
+                  onClick={(e) => {
+                    console.log('=== BUTTON CLICKED ===');
+                    console.log('Form errors:', errors);
+                    console.log('Loading state:', loading);
+                  }}
+                >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Войти
                 </Button>
