@@ -270,10 +270,11 @@ export const useVoiceChannel = (channelId: string | null) => {
       setupVoiceActivityDetection(stream, audioContext);
 
       // Создаем канал для сигналинга
+      console.log('=== CREATING VOICE CHANNEL ===', `voice_channel_${channelId}`);
       const channel = supabase.channel(`voice_channel_${channelId}`)
         .on('presence', { event: 'sync' }, async () => {
           const state = channel.presenceState();
-          console.log('=== VOICE CHANNEL PRESENCE SYNC ===');
+          console.log('=== NEW VOICE CHANNEL PRESENCE SYNC ===');
           console.log('Presence state:', state);
           
           const users: VoiceUser[] = Object.values(state).flat().map((presence: any) => ({
@@ -282,17 +283,27 @@ export const useVoiceChannel = (channelId: string | null) => {
             isMuted: presence.isMuted || false,
             isSpeaking: false
           }));
-          console.log('Connected users from sync:', users);
+          console.log('Users from sync event:', users);
           setConnectedUsers(users);
           
-          // СОЗДАЕМ PEER CONNECTIONS ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+          // ПРИНУДИТЕЛЬНО СОЗДАЕМ PEER CONNECTIONS
           const { data: { user: currentUser } } = await supabase.auth.getUser();
-          console.log('Current user in sync:', currentUser?.id);
+          console.log('=== FORCING PEER CONNECTIONS FROM SYNC ===');
+          console.log('Current user:', currentUser?.id);
+          console.log('Total users to connect:', users.length);
           
           for (const user of users) {
-            if (user.user_id !== currentUser?.id && !peersRef.current.has(user.user_id)) {
-              console.log('Creating peer connection for existing user:', user.user_id);
-              await createPeerConnection(user.user_id);
+            if (user.user_id !== currentUser?.id) {
+              console.log('=== CREATING PEER CONNECTION IN SYNC ===');
+              console.log('Target user:', user.user_id);
+              try {
+                await createPeerConnection(user.user_id);
+                console.log('Peer connection created successfully for:', user.user_id);
+              } catch (error) {
+                console.error('Failed to create peer connection for:', user.user_id, error);
+              }
+            } else {
+              console.log('Skipping self connection:', user.user_id);
             }
           }
         })
