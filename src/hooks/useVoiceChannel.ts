@@ -1,29 +1,30 @@
-// Spacebar Voice Channel Hook - redirects to new implementation
+// WebRTC Voice Channel Hook
 import { useEffect } from 'react';
-import { useSpacebarVoice } from './useSpacebarVoice';
+import { useWebRTCVoice } from './useWebRTCVoice';
 
 export const useVoiceChannel = (channelId: string | null) => {
-  const spacebar = useSpacebarVoice();
+  const webrtc = useWebRTCVoice();
   
   // Auto-connect when channel ID is provided
   useEffect(() => {
-    if (channelId && !spacebar.isConnected) {
-      console.log('Auto-connecting to voice channel:', channelId);
-      spacebar.connectToVoiceChannel(channelId).catch(error => {
-        console.error('Auto-connect failed:', error);
+    if (channelId && !webrtc.isConnected && !webrtc.isConnecting) {
+      console.log('🔊 Auto-connecting to voice channel:', channelId);
+      webrtc.connectToVoiceChannel(channelId).catch(error => {
+        console.error('❌ Auto-connect failed:', error);
       });
     }
-  }, [channelId, spacebar.isConnected, spacebar.connectToVoiceChannel]);
+  }, [channelId, webrtc.isConnected, webrtc.isConnecting, webrtc.connectToVoiceChannel]);
   
   return {
-    isConnected: spacebar.isConnected,
-    isRecording: spacebar.isRecording,
-    isMuted: spacebar.isMuted,
-    connectedUsers: spacebar.connectedUsers,
-    connectToVoiceChannel: () => channelId ? spacebar.connectToVoiceChannel(channelId) : Promise.resolve(),
-    disconnectFromVoiceChannel: spacebar.disconnectFromVoiceChannel,
-    toggleMute: spacebar.toggleMute,
-    localStream: null, // Not exposed in new implementation
-    isSpeaking: false // Not implemented yet
+    isConnected: webrtc.isConnected,
+    isRecording: webrtc.isRecording,
+    isMuted: webrtc.isMuted,
+    connectedUsers: webrtc.connectedUsers,
+    connectToVoiceChannel: () => channelId ? webrtc.connectToVoiceChannel(channelId) : Promise.resolve(),
+    disconnectFromVoiceChannel: webrtc.disconnectFromVoiceChannel,
+    toggleMute: webrtc.toggleMute,
+    localStream: null, // WebRTC manager handles this internally
+    isSpeaking: false, // Will be implemented with speaking detection
+    isConnecting: webrtc.isConnecting
   };
 };
