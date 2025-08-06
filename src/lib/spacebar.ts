@@ -466,7 +466,7 @@ class SpacebarClient {
 
 // Default configuration - you'll need to update this with your Spacebar server URL
 const DEFAULT_CONFIG: SpacebarConfig = {
-  endpoint: 'https://api.spacebar.chat' // Update this to your server
+  endpoint: 'http://localhost:3001' // Update this to your Spacebar server
 };
 
 export const spacebarClient = new SpacebarClient(DEFAULT_CONFIG);
