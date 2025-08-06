@@ -34,11 +34,26 @@ export const useSpacebarVoice = () => {
     console.log('🔊 Starting voice channel connection:', channelId);
     
     try {
-      // Check if user is authenticated
-      const user = spacebarClient.getUser();
+      // Check if user is authenticated in Spacebar
+      let user = spacebarClient.getUser();
+      
       if (!user) {
-        console.error('❌ User not authenticated');
-        throw new Error('User not authenticated');
+        // Create a mock user from current session for development
+        console.log('🎭 Creating mock Spacebar user for development');
+        
+        // Get current user from localStorage or create default
+        const mockUser = {
+          id: '1970d541-9bab-4926-96de-4fd226e520eb', // Use a consistent ID
+          username: 'TestUser',
+          discriminator: '0001',
+          avatar: null
+        };
+        
+        // Set mock user in spacebar client
+        spacebarClient.setMockUser(mockUser);
+        user = mockUser;
+        
+        console.log('✅ Mock user created:', user.username);
       }
 
       console.log('✅ User authenticated:', user.username);

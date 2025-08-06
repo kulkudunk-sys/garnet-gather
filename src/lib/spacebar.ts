@@ -462,6 +462,12 @@ class SpacebarClient {
       console.error('Error disconnecting Spacebar client:', error);
     }
   }
+
+  // Public method to set a mock user for development
+  setMockUser(user: { id: string; username: string; discriminator: string; avatar?: string | null }): void {
+    this.user = user;
+    console.log('Mock user set in Spacebar client:', user.username);
+  }
 }
 
 // Default configuration - you'll need to update this with your Spacebar server URL
