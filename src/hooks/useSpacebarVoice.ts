@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { spacebarClient } from '@/lib/spacebar';
 
 interface VoiceUser {
@@ -30,56 +30,19 @@ export const useSpacebarVoice = () => {
     volume: 100
   });
 
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-
   const connectToVoiceChannel = useCallback(async (channelId: string) => {
     try {
-      // Initialize WebRTC peer connection
-      const peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }
-        ]
-      });
-
-      peerConnectionRef.current = peerConnection;
-
-      // Get user media for microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      });
+      // Find the guild for this channel (simplified - assuming first guild)
+      const guilds = spacebarClient.getGuilds();
+      const guild = guilds[0]; // You might want to make this more specific
       
-      localStreamRef.current = stream;
+      if (!guild) {
+        throw new Error('No guild found');
+      }
 
-      // Add local stream to peer connection
-      stream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, stream);
-      });
-
-      // Connect to Spacebar voice gateway via WebSocket
-      const voiceWsUrl = spacebarClient.config.endpoint.replace('http', 'ws') + '/voice';
-      const voiceWs = new WebSocket(voiceWsUrl);
-      wsRef.current = voiceWs;
-
-      voiceWs.onopen = () => {
-        console.log('Connected to voice gateway');
-        
-        // Send voice identification
-        voiceWs.send(JSON.stringify({
-          op: 0, // Voice Identify
-          d: {
-            channel_id: channelId,
-            user_id: spacebarClient.getUser()?.id,
-            session_id: Math.random().toString(36).substring(7),
-            token: spacebarClient.token
-          }
-        }));
-
+      // Set up event listeners for voice events
+      const handleVoiceReady = (data: any) => {
+        console.log('Voice ready:', data);
         setVoiceState(prev => ({
           ...prev,
           channelId,
@@ -87,93 +50,73 @@ export const useSpacebarVoice = () => {
         }));
       };
 
-      voiceWs.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleVoiceMessage(data);
-      };
-
-      voiceWs.onerror = (error) => {
-        console.error('Voice WebSocket error:', error);
-      };
-
-      voiceWs.onclose = () => {
-        console.log('Voice WebSocket closed');
+      const handleVoiceSpeaking = (data: any) => {
         setVoiceState(prev => ({
           ...prev,
-          isConnected: false,
-          channelId: null
+          connectedUsers: prev.connectedUsers.map(user => 
+            user.id === data.user_id 
+              ? { ...user, isSpeaking: data.speaking > 0 }
+              : user
+          )
         }));
       };
 
-      // Set up peer connection event handlers
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate && voiceWs.readyState === WebSocket.OPEN) {
-          voiceWs.send(JSON.stringify({
-            op: 3, // ICE Candidate
-            d: event.candidate
-          }));
+      const handleVoiceStateUpdate = (data: any) => {
+        if (data.channel_id === channelId) {
+          const user = {
+            id: data.user_id,
+            username: data.member?.user?.username || 'Unknown',
+            isMuted: data.self_mute || data.mute,
+            isSpeaking: false,
+            isDeafened: data.self_deaf || data.deaf
+          };
+
+          setVoiceState(prev => {
+            const existingUsers = prev.connectedUsers.filter(u => u.id !== data.user_id);
+            return {
+              ...prev,
+              connectedUsers: data.channel_id ? [...existingUsers, user] : existingUsers
+            };
+          });
         }
       };
 
-      peerConnection.ontrack = (event) => {
-        // Handle incoming audio streams from other users
-        console.log('Received remote stream:', event.streams[0]);
+      const handleVoiceDisconnected = () => {
+        setVoiceState(prev => ({
+          ...prev,
+          isConnected: false,
+          channelId: null,
+          connectedUsers: []
+        }));
       };
+
+      // Set up event listeners
+      spacebarClient.on('voiceReady', handleVoiceReady);
+      spacebarClient.on('voiceSpeaking', handleVoiceSpeaking);
+      spacebarClient.on('voiceStateUpdate', handleVoiceStateUpdate);
+      spacebarClient.on('voiceDisconnected', handleVoiceDisconnected);
+
+      // Connect to voice channel through Spacebar
+      await spacebarClient.connectToVoiceChannel(guild.id, channelId);
+
+      console.log(`Connected to voice channel: ${channelId}`);
 
     } catch (error) {
       console.error('Failed to connect to voice channel:', error);
+      setVoiceState(prev => ({
+        ...prev,
+        isConnected: false,
+        channelId: null
+      }));
       throw error;
     }
   }, []);
 
-  const handleVoiceMessage = useCallback((data: any) => {
-    const { op, d } = data;
-
-    switch (op) {
-      case 2: // Ready
-        console.log('Voice connection ready');
-        break;
-      case 4: // Session Description
-        if (peerConnectionRef.current) {
-          peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(d));
-        }
-        break;
-      case 5: // Speaking
-        // Update user speaking status
-        setVoiceState(prev => ({
-          ...prev,
-          connectedUsers: prev.connectedUsers.map(user => 
-            user.id === d.user_id 
-              ? { ...user, isSpeaking: d.speaking }
-              : user
-          )
-        }));
-        break;
-      case 6: // Heartbeat ACK
-        console.log('Voice heartbeat acknowledged');
-        break;
-    }
-  }, []);
 
   const disconnectFromVoiceChannel = useCallback(async () => {
     try {
-      // Close WebSocket connection
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-
-      // Close peer connection
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-
-      // Release local media stream
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
+      // Disconnect through Spacebar client
+      await spacebarClient.disconnectFromVoiceChannel();
 
       // Reset voice state
       setVoiceState({
@@ -196,11 +139,8 @@ export const useSpacebarVoice = () => {
     try {
       const newMutedState = !voiceState.isMuted;
       
-      if (localStreamRef.current) {
-        localStreamRef.current.getAudioTracks().forEach(track => {
-          track.enabled = !newMutedState;
-        });
-      }
+      // Update voice state through Spacebar client
+      spacebarClient.setVoiceState(newMutedState, voiceState.isDeafened);
 
       setVoiceState(prev => ({
         ...prev,
@@ -211,23 +151,27 @@ export const useSpacebarVoice = () => {
     } catch (error) {
       console.error('Error toggling mute:', error);
     }
-  }, [voiceState.isMuted]);
+  }, [voiceState.isMuted, voiceState.isDeafened]);
 
   const toggleDeafen = useCallback(async () => {
     try {
       const newDeafenedState = !voiceState.isDeafened;
+      const newMutedState = newDeafenedState ? true : voiceState.isMuted;
+
+      // Update voice state through Spacebar client
+      spacebarClient.setVoiceState(newMutedState, newDeafenedState);
 
       setVoiceState(prev => ({
         ...prev,
         isDeafened: newDeafenedState,
-        isMuted: newDeafenedState ? true : prev.isMuted // Deafening also mutes
+        isMuted: newMutedState
       }));
 
       console.log('Deafen toggled:', newDeafenedState);
     } catch (error) {
       console.error('Error toggling deafen:', error);
     }
-  }, [voiceState.isDeafened]);
+  }, [voiceState.isDeafened, voiceState.isMuted]);
 
   const setVolume = useCallback((volume: number) => {
     try {
@@ -236,16 +180,7 @@ export const useSpacebarVoice = () => {
         volume: Math.max(0, Math.min(100, volume))
       }));
 
-      // Adjust audio output volume
-      if (localStreamRef.current) {
-        const audioTracks = localStreamRef.current.getAudioTracks();
-        audioTracks.forEach(track => {
-          if ('volume' in track) {
-            (track as any).volume = volume / 100;
-          }
-        });
-      }
-
+      // Note: Volume control would be handled by Spacebar server
       console.log(`Volume set to: ${volume}%`);
     } catch (error) {
       console.error('Error setting volume:', error);

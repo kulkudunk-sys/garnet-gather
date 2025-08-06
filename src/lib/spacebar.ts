@@ -34,14 +34,18 @@ interface Message {
 
 class SpacebarClient {
   private ws: WebSocket | null = null;
+  private voiceWs: WebSocket | null = null;
   public config: SpacebarConfig;
   public token: string | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private voiceHeartbeatInterval: NodeJS.Timeout | null = null;
   private sequenceNumber: number | null = null;
   private sessionId: string | null = null;
+  private voiceSessionId: string | null = null;
   private user: User | null = null;
   private guilds: Guild[] = [];
   private eventHandlers: Map<string, Function[]> = new Map();
+  private voiceState: any = null;
 
   constructor(config: SpacebarConfig) {
     this.config = config;
@@ -181,6 +185,9 @@ class SpacebarClient {
       case 'VOICE_STATE_UPDATE':
         this.emit('voiceStateUpdate', data);
         break;
+      case 'VOICE_SERVER_UPDATE':
+        this.emit('voiceServerUpdate', data);
+        break;
     }
   }
 
@@ -233,8 +240,211 @@ class SpacebarClient {
     return this.guilds;
   }
 
+  async connectToVoiceChannel(guildId: string, channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Send voice state update to main gateway
+        if (!this.ws) {
+          throw new Error('Not connected to gateway');
+        }
+
+        const voiceStateUpdate = {
+          op: 4,
+          d: {
+            guild_id: guildId,
+            channel_id: channelId,
+            self_mute: false,
+            self_deaf: false
+          }
+        };
+
+        this.ws.send(JSON.stringify(voiceStateUpdate));
+
+        // Listen for voice server update
+        const handleVoiceServerUpdate = (data: any) => {
+          if (data.guild_id === guildId) {
+            this.connectToVoiceGateway(data.endpoint, data.token, guildId, channelId)
+              .then(() => resolve())
+              .catch(reject);
+          }
+        };
+
+        this.on('voiceServerUpdate', handleVoiceServerUpdate);
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          reject(new Error('Voice connection timeout'));
+        }, 10000);
+
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private async connectToVoiceGateway(endpoint: string, token: string, guildId: string, channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Clean up existing voice connection
+        if (this.voiceWs) {
+          this.voiceWs.close();
+        }
+
+        const voiceGatewayUrl = `wss://${endpoint}`;
+        this.voiceWs = new WebSocket(voiceGatewayUrl);
+
+        this.voiceWs.onopen = () => {
+          console.log('Connected to voice gateway');
+          
+          // Send voice identify
+          const identify = {
+            op: 0,
+            d: {
+              server_id: guildId,
+              user_id: this.user?.id,
+              session_id: this.sessionId,
+              token: token
+            }
+          };
+
+          this.voiceWs!.send(JSON.stringify(identify));
+        };
+
+        this.voiceWs.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          this.handleVoiceMessage(data, resolve, reject);
+        };
+
+        this.voiceWs.onerror = (error) => {
+          console.error('Voice WebSocket error:', error);
+          reject(error);
+        };
+
+        this.voiceWs.onclose = () => {
+          console.log('Voice WebSocket closed');
+          if (this.voiceHeartbeatInterval) {
+            clearInterval(this.voiceHeartbeatInterval);
+            this.voiceHeartbeatInterval = null;
+          }
+          this.emit('voiceDisconnected');
+        };
+
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private handleVoiceMessage(data: any, resolve?: () => void, reject?: (error: any) => void) {
+    const { op, d } = data;
+
+    switch (op) {
+      case 2: // Ready
+        console.log('Voice ready');
+        this.voiceSessionId = d.session_id;
+        this.startVoiceHeartbeat(d.heartbeat_interval);
+        this.emit('voiceReady', d);
+        if (resolve) resolve();
+        break;
+      case 3: // Heartbeat
+        this.sendVoiceHeartbeat();
+        break;
+      case 4: // Session Description
+        this.emit('voiceSessionDescription', d);
+        break;
+      case 5: // Speaking
+        this.emit('voiceSpeaking', d);
+        break;
+      case 6: // Heartbeat ACK
+        console.log('Voice heartbeat acknowledged');
+        break;
+      case 8: // Hello
+        this.startVoiceHeartbeat(d.heartbeat_interval);
+        break;
+    }
+  }
+
+  private startVoiceHeartbeat(interval: number) {
+    if (this.voiceHeartbeatInterval) {
+      clearInterval(this.voiceHeartbeatInterval);
+    }
+    
+    this.voiceHeartbeatInterval = setInterval(() => {
+      this.sendVoiceHeartbeat();
+    }, interval);
+  }
+
+  private sendVoiceHeartbeat() {
+    if (!this.voiceWs) return;
+    
+    const heartbeat = {
+      op: 3,
+      d: Date.now()
+    };
+    
+    this.voiceWs.send(JSON.stringify(heartbeat));
+  }
+
+  async disconnectFromVoiceChannel(): Promise<void> {
+    try {
+      // Send voice state update to disconnect
+      if (this.ws) {
+        const voiceStateUpdate = {
+          op: 4,
+          d: {
+            guild_id: null,
+            channel_id: null,
+            self_mute: false,
+            self_deaf: false
+          }
+        };
+
+        this.ws.send(JSON.stringify(voiceStateUpdate));
+      }
+
+      // Close voice WebSocket
+      if (this.voiceWs) {
+        this.voiceWs.close();
+        this.voiceWs = null;
+      }
+
+      // Clear voice heartbeat
+      if (this.voiceHeartbeatInterval) {
+        clearInterval(this.voiceHeartbeatInterval);
+        this.voiceHeartbeatInterval = null;
+      }
+
+      this.voiceSessionId = null;
+      this.voiceState = null;
+      
+      console.log('Disconnected from voice channel');
+      this.emit('voiceDisconnected');
+    } catch (error) {
+      console.error('Error disconnecting from voice channel:', error);
+    }
+  }
+
+  setVoiceState(muted: boolean, deafened: boolean) {
+    this.voiceState = { muted, deafened };
+    
+    if (this.voiceWs) {
+      const speaking = {
+        op: 5,
+        d: {
+          speaking: muted ? 0 : 1,
+          delay: 0,
+          ssrc: 0
+        }
+      };
+      
+      this.voiceWs.send(JSON.stringify(speaking));
+    }
+  }
+
   async disconnect(): Promise<void> {
     try {
+      await this.disconnectFromVoiceChannel();
+      
       if (this.ws) {
         this.ws.close();
         this.ws = null;
