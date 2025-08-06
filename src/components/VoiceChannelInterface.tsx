@@ -108,10 +108,16 @@ export const VoiceChannelInterface = ({ channelId, channelName, serverId, onClos
 
       {/* Connected Users */}
       <div className="flex-1 overflow-auto p-4">
-        {connectedUsers.length === 0 ? (
+        {!isConnected ? (
           <div className="text-center text-muted-foreground py-8">
             <Volume2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p>Подключение к голосовому каналу...</p>
+            <p className="text-sm mt-2">Настройка голосового соединения...</p>
+          </div>
+        ) : connectedUsers.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">
+            <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <p>Вы подключены к голосовому каналу</p>
             <p className="text-sm mt-2">Ожидание других участников...</p>
           </div>
         ) : (
