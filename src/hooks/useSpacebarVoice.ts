@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { spacebarClient } from '@/lib/spacebar';
-import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } from '@discordjs/voice';
 
 interface VoiceUser {
   id: string;
@@ -12,8 +11,8 @@ interface VoiceUser {
 
 interface VoiceChannelState {
   channelId: string | null;
-  connected: boolean;
-  users: VoiceUser[];
+  isConnected: boolean;
+  connectedUsers: VoiceUser[];
   isRecording: boolean;
   isMuted: boolean;
   isDeafened: boolean;
@@ -23,188 +22,180 @@ interface VoiceChannelState {
 export const useSpacebarVoice = () => {
   const [voiceState, setVoiceState] = useState<VoiceChannelState>({
     channelId: null,
-    connected: false,
-    users: [],
+    isConnected: false,
+    connectedUsers: [],
     isRecording: false,
     isMuted: false,
     isDeafened: false,
     volume: 100
   });
 
-  const voiceConnectionRef = useRef<any>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const audioPlayerRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Connect to voice channel
   const connectToVoiceChannel = useCallback(async (channelId: string) => {
     try {
-      console.log('=== CONNECTING TO SPACEBAR VOICE CHANNEL ===');
-      console.log('Channel ID:', channelId);
+      // Initialize WebRTC peer connection
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' }
+        ]
+      });
 
-      const client = spacebarClient.getClient();
-      
-      // Get the channel
-      const channel = await client.channels.fetch(channelId);
-      if (!channel || !channel.isVoiceBased()) {
-        throw new Error('Invalid voice channel');
-      }
+      peerConnectionRef.current = peerConnection;
 
-      // Get the guild ID from the channel
-      const guildId = channel.guild.id;
-
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Get user media for microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000
-        }
+          autoGainControl: true
+        } 
       });
-
+      
       localStreamRef.current = stream;
 
-      // Create voice connection using @discordjs/voice
-      const connection = joinVoiceChannel({
-        channelId: channelId,
-        guildId: guildId,
-        adapterCreator: channel.guild.voiceAdapterCreator,
-        selfMute: voiceState.isMuted,
-        selfDeaf: voiceState.isDeafened
+      // Add local stream to peer connection
+      stream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, stream);
       });
 
-      voiceConnectionRef.current = connection;
+      // Connect to Spacebar voice gateway via WebSocket
+      const voiceWsUrl = spacebarClient.config.endpoint.replace('http', 'ws') + '/voice';
+      const voiceWs = new WebSocket(voiceWsUrl);
+      wsRef.current = voiceWs;
 
-      // Set up connection events
-      connection.on(VoiceConnectionStatus.Ready, () => {
-        console.log('✅ Voice connection is ready!');
-        setVoiceState(prev => ({
-          ...prev,
-          connected: true,
-          isRecording: true
-        }));
-      });
-
-      connection.on(VoiceConnectionStatus.Disconnected, () => {
-        console.log('❌ Voice connection disconnected');
-        setVoiceState(prev => ({
-          ...prev,
-          connected: false,
-          isRecording: false
-        }));
-      });
-
-      // Create audio player for local stream
-      const player = createAudioPlayer();
-      audioPlayerRef.current = player;
-
-      // Subscribe the connection to the audio player
-      connection.subscribe(player);
-
-      // Convert MediaStream to audio resource (this is simplified)
-      // In a real implementation, you'd need to convert the stream properly
-      console.log('Local audio stream ready');
-
-      // Monitor voice state changes for users in the channel
-      client.on('voiceStateUpdate', (oldState, newState) => {
-        if (newState.channelId === channelId) {
-          // User joined
-          if (newState.member && !oldState.channelId) {
-            console.log('User joined voice:', newState.member.user.username);
-            setVoiceState(prev => ({
-              ...prev,
-              users: [...prev.users.filter(u => u.id !== newState.member!.id), {
-                id: newState.member!.id,
-                username: newState.member!.user.username,
-                isMuted: newState.mute || false,
-                isSpeaking: false,
-                isDeafened: newState.deaf || false
-              }]
-            }));
-          }
-          
-          // User updated
-          if (newState.member && oldState.channelId === channelId) {
-            console.log('User updated:', newState.member.user.username);
-            setVoiceState(prev => ({
-              ...prev,
-              users: prev.users.map(u => 
-                u.id === newState.member!.id 
-                  ? { ...u, isMuted: newState.mute || false, isDeafened: newState.deaf || false }
-                  : u
-              )
-            }));
-          }
-        }
+      voiceWs.onopen = () => {
+        console.log('Connected to voice gateway');
         
-        // User left
-        if (oldState.channelId === channelId && newState.channelId !== channelId) {
-          if (oldState.member) {
-            console.log('User left voice:', oldState.member.user.username);
-            setVoiceState(prev => ({
-              ...prev,
-              users: prev.users.filter(u => u.id !== oldState.member!.id)
-            }));
+        // Send voice identification
+        voiceWs.send(JSON.stringify({
+          op: 0, // Voice Identify
+          d: {
+            channel_id: channelId,
+            user_id: spacebarClient.getUser()?.id,
+            session_id: Math.random().toString(36).substring(7),
+            token: spacebarClient.token
           }
+        }));
+
+        setVoiceState(prev => ({
+          ...prev,
+          channelId,
+          isConnected: true
+        }));
+      };
+
+      voiceWs.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleVoiceMessage(data);
+      };
+
+      voiceWs.onerror = (error) => {
+        console.error('Voice WebSocket error:', error);
+      };
+
+      voiceWs.onclose = () => {
+        console.log('Voice WebSocket closed');
+        setVoiceState(prev => ({
+          ...prev,
+          isConnected: false,
+          channelId: null
+        }));
+      };
+
+      // Set up peer connection event handlers
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate && voiceWs.readyState === WebSocket.OPEN) {
+          voiceWs.send(JSON.stringify({
+            op: 3, // ICE Candidate
+            d: event.candidate
+          }));
         }
-      });
+      };
 
-      setVoiceState(prev => ({
-        ...prev,
-        channelId
-      }));
+      peerConnection.ontrack = (event) => {
+        // Handle incoming audio streams from other users
+        console.log('Received remote stream:', event.streams[0]);
+      };
 
-      console.log('✅ Successfully initiated voice channel connection');
     } catch (error) {
-      console.error('❌ Failed to connect to voice channel:', error);
+      console.error('Failed to connect to voice channel:', error);
       throw error;
     }
-  }, [voiceState.isMuted, voiceState.isDeafened]);
+  }, []);
 
-  // Disconnect from voice channel
+  const handleVoiceMessage = useCallback((data: any) => {
+    const { op, d } = data;
+
+    switch (op) {
+      case 2: // Ready
+        console.log('Voice connection ready');
+        break;
+      case 4: // Session Description
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(d));
+        }
+        break;
+      case 5: // Speaking
+        // Update user speaking status
+        setVoiceState(prev => ({
+          ...prev,
+          connectedUsers: prev.connectedUsers.map(user => 
+            user.id === d.user_id 
+              ? { ...user, isSpeaking: d.speaking }
+              : user
+          )
+        }));
+        break;
+      case 6: // Heartbeat ACK
+        console.log('Voice heartbeat acknowledged');
+        break;
+    }
+  }, []);
+
   const disconnectFromVoiceChannel = useCallback(async () => {
     try {
-      console.log('=== DISCONNECTING FROM VOICE CHANNEL ===');
-
-      if (voiceConnectionRef.current) {
-        voiceConnectionRef.current.destroy();
-        voiceConnectionRef.current = null;
+      // Close WebSocket connection
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
 
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.stop();
-        audioPlayerRef.current = null;
+      // Close peer connection
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
       }
 
+      // Release local media stream
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
         localStreamRef.current = null;
       }
 
-      setVoiceState(prev => ({
-        ...prev,
+      // Reset voice state
+      setVoiceState({
         channelId: null,
-        connected: false,
-        users: [],
-        isRecording: false
-      }));
+        isConnected: false,
+        connectedUsers: [],
+        isRecording: false,
+        isMuted: false,
+        isDeafened: false,
+        volume: 100
+      });
 
-      console.log('✅ Disconnected from voice channel');
+      console.log('Disconnected from voice channel');
     } catch (error) {
-      console.error('❌ Error disconnecting from voice channel:', error);
+      console.error('Error disconnecting from voice channel:', error);
     }
   }, []);
 
-  // Toggle mute
   const toggleMute = useCallback(async () => {
     try {
       const newMutedState = !voiceState.isMuted;
       
-      if (voiceConnectionRef.current) {
-        // Update voice connection state
-        voiceConnectionRef.current.setSelfMute(newMutedState);
-      }
-
       if (localStreamRef.current) {
         localStreamRef.current.getAudioTracks().forEach(track => {
           track.enabled = !newMutedState;
@@ -222,14 +213,9 @@ export const useSpacebarVoice = () => {
     }
   }, [voiceState.isMuted]);
 
-  // Toggle deafen
   const toggleDeafen = useCallback(async () => {
     try {
       const newDeafenedState = !voiceState.isDeafened;
-      
-      if (voiceConnectionRef.current) {
-        voiceConnectionRef.current.setSelfDeaf(newDeafenedState);
-      }
 
       setVoiceState(prev => ({
         ...prev,
@@ -243,18 +229,24 @@ export const useSpacebarVoice = () => {
     }
   }, [voiceState.isDeafened]);
 
-  // Set volume
-  const setVolume = useCallback(async (volume: number) => {
+  const setVolume = useCallback((volume: number) => {
     try {
-      if (audioPlayerRef.current) {
-        // Volume control would need to be implemented at the audio level
-        console.log('Setting volume to:', volume);
-      }
-
       setVoiceState(prev => ({
         ...prev,
-        volume
+        volume: Math.max(0, Math.min(100, volume))
       }));
+
+      // Adjust audio output volume
+      if (localStreamRef.current) {
+        const audioTracks = localStreamRef.current.getAudioTracks();
+        audioTracks.forEach(track => {
+          if ('volume' in track) {
+            (track as any).volume = volume / 100;
+          }
+        });
+      }
+
+      console.log(`Volume set to: ${volume}%`);
     } catch (error) {
       console.error('Error setting volume:', error);
     }
@@ -275,8 +267,8 @@ export const useSpacebarVoice = () => {
     toggleDeafen,
     setVolume,
     // Aliases for compatibility
-    isConnected: voiceState.connected,
-    connectedUsers: voiceState.users,
+    isConnected: voiceState.isConnected,
+    connectedUsers: voiceState.connectedUsers,
     isMuted: voiceState.isMuted,
     isRecording: voiceState.isRecording,
     currentChannelId: voiceState.channelId

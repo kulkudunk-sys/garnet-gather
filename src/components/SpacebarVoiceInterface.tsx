@@ -59,7 +59,7 @@ export const SpacebarVoiceInterface: React.FC<SpacebarVoiceInterfaceProps> = ({
         <CardTitle className="flex items-center gap-2 text-lg">
           <Users className="h-5 w-5" />
           {channelName}
-          {voiceState.connected && (
+          {voiceState.isConnected && (
             <Badge variant="secondary" className="ml-auto">
               Connected
             </Badge>
@@ -70,7 +70,7 @@ export const SpacebarVoiceInterface: React.FC<SpacebarVoiceInterfaceProps> = ({
       <CardContent className="space-y-4">
         {/* Connection Controls */}
         <div className="flex gap-2">
-          {!voiceState.connected ? (
+          {!voiceState.isConnected ? (
             <Button 
               onClick={handleConnect} 
               className="flex-1"
@@ -92,7 +92,7 @@ export const SpacebarVoiceInterface: React.FC<SpacebarVoiceInterfaceProps> = ({
           )}
         </div>
 
-        {voiceState.connected && (
+        {voiceState.isConnected && (
           <>
             {/* Audio Controls */}
             <div className="flex gap-2">
@@ -144,11 +144,11 @@ export const SpacebarVoiceInterface: React.FC<SpacebarVoiceInterfaceProps> = ({
             </div>
 
             {/* Connected Users */}
-            {voiceState.users.length > 0 && (
+            {voiceState.connectedUsers.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">Connected Users ({voiceState.users.length})</h4>
+                <h4 className="text-sm font-medium">Connected Users ({voiceState.connectedUsers.length})</h4>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {voiceState.users.map((user) => (
+                  {voiceState.connectedUsers.map((user) => (
                     <div
                       key={user.id}
                       className={cn(

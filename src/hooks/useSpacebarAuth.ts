@@ -4,9 +4,8 @@ import { spacebarClient } from '@/lib/spacebar';
 interface SpacebarUser {
   id: string;
   username: string;
-  tag: string;
-  avatar?: string;
   discriminator: string;
+  avatar?: string;
 }
 
 interface AuthState {
@@ -35,18 +34,15 @@ export const useSpacebarAuth = () => {
         if (storedToken) {
           await spacebarClient.initialize();
           await spacebarClient.login(storedToken);
-          const client = spacebarClient.getClient();
+          const user = spacebarClient.getUser();
           
-          // Get current user info
-          const userInfo = client.user;
-          if (userInfo) {
+          if (user) {
             setAuthState({
               user: {
-                id: userInfo.id,
-                username: userInfo.username,
-                tag: userInfo.tag,
-                avatar: userInfo.avatar,
-                discriminator: userInfo.discriminator
+                id: user.id,
+                username: user.username,
+                discriminator: user.discriminator,
+                avatar: user.avatar
               },
               isLoading: false,
               isAuthenticated: true,
@@ -79,17 +75,15 @@ export const useSpacebarAuth = () => {
       // Store token
       localStorage.setItem('spacebar_token', token);
       
-      const client = spacebarClient.getClient();
-      const userInfo = client.user;
+      const user = spacebarClient.getUser();
       
-      if (userInfo) {
+      if (user) {
         setAuthState({
           user: {
-            id: userInfo.id,
-            username: userInfo.username,
-            tag: userInfo.tag,
-            avatar: userInfo.avatar,
-            discriminator: userInfo.discriminator
+            id: user.id,
+            username: user.username,
+            discriminator: user.discriminator,
+            avatar: user.avatar
           },
           isLoading: false,
           isAuthenticated: true,
@@ -121,17 +115,15 @@ export const useSpacebarAuth = () => {
         
         // Login with the new token
         await spacebarClient.login(result.token);
-        const client = spacebarClient.getClient();
-        const userInfo = client.user;
+        const user = spacebarClient.getUser();
         
-        if (userInfo) {
+        if (user) {
           setAuthState({
             user: {
-              id: userInfo.id,
-              username: userInfo.username,
-              tag: userInfo.tag,
-              avatar: userInfo.avatar,
-              discriminator: userInfo.discriminator
+              id: user.id,
+              username: user.username,
+              discriminator: user.discriminator,
+              avatar: user.avatar
             },
             isLoading: false,
             isAuthenticated: true,

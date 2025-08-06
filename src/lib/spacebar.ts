@@ -1,157 +1,262 @@
-// Spacebar Chat client configuration using discord.js (Spacebar is Discord-compatible)
-import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
-
+// Browser-compatible Spacebar Chat client using WebSockets
 interface SpacebarConfig {
   endpoint: string;
   token?: string;
 }
 
+interface User {
+  id: string;
+  username: string;
+  discriminator: string;
+  avatar?: string;
+}
+
+interface Guild {
+  id: string;
+  name: string;
+  channels: Channel[];
+}
+
+interface Channel {
+  id: string;
+  name: string;
+  type: number; // 0 = text, 2 = voice
+  guild_id: string;
+}
+
+interface Message {
+  id: string;
+  content: string;
+  author: User;
+  channel_id: string;
+  timestamp: string;
+}
+
 class SpacebarClient {
-  private client: Client | null = null;
-  private rest: REST | null = null;
-  private config: SpacebarConfig;
-  private token: string | null = null;
+  private ws: WebSocket | null = null;
+  public config: SpacebarConfig;
+  public token: string | null = null;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private sequenceNumber: number | null = null;
+  private sessionId: string | null = null;
+  private user: User | null = null;
+  private guilds: Guild[] = [];
+  private eventHandlers: Map<string, Function[]> = new Map();
 
   constructor(config: SpacebarConfig) {
     this.config = config;
   }
 
-  async initialize(token?: string) {
-    if (this.client) return this.client;
+  on(event: string, handler: Function) {
+    if (!this.eventHandlers.has(event)) {
+      this.eventHandlers.set(event, []);
+    }
+    this.eventHandlers.get(event)!.push(handler);
+  }
 
-    console.log('=== INITIALIZING SPACEBAR CLIENT ===');
-    console.log('Endpoint:', this.config.endpoint);
-
-    try {
-      // Create Discord.js client with voice intents
-      this.client = new Client({
-        intents: [
-          GatewayIntentBits.Guilds,
-          GatewayIntentBits.GuildVoiceStates,
-          GatewayIntentBits.GuildMessages,
-          GatewayIntentBits.MessageContent
-        ]
-      });
-
-      // Set up REST API for Spacebar endpoint
-      if (token || this.config.token) {
-        this.token = token || this.config.token!;
-        this.rest = new REST({ version: '10' }).setToken(this.token);
-        
-        // Override the REST API endpoint for Spacebar
-        if (this.config.endpoint !== 'https://discord.com/api') {
-          // @ts-ignore - Private property override for Spacebar
-          this.rest.options.api = this.config.endpoint;
-        }
-      }
-
-      console.log('✅ Spacebar client initialized successfully');
-      return this.client;
-    } catch (error) {
-      console.error('❌ Failed to initialize Spacebar client:', error);
-      throw error;
+  emit(event: string, ...args: any[]) {
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      handlers.forEach(handler => handler(...args));
     }
   }
 
-  async login(token: string) {
-    if (!this.client) {
-      throw new Error('Client not initialized. Call initialize() first.');
+  async initialize(token?: string): Promise<boolean> {
+    try {
+      if (!token && !this.config.token) {
+        console.log('No token provided for Spacebar client initialization');
+        return false;
+      }
+
+      this.token = token || this.config.token!;
+      console.log('Spacebar client initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Spacebar client:', error);
+      return false;
     }
+  }
 
-    console.log('=== SPACEBAR LOGIN ===');
-    console.log('Using token authentication');
-
+  async login(token: string): Promise<{ token: string }> {
     try {
       this.token = token;
       
-      // Set up REST API
-      this.rest = new REST({ version: '10' }).setToken(token);
-      if (this.config.endpoint !== 'https://discord.com/api') {
-        // @ts-ignore - Private property override for Spacebar
-        this.rest.options.api = this.config.endpoint;
-      }
+      // Connect to Spacebar WebSocket gateway
+      const gatewayUrl = this.config.endpoint.replace('http', 'ws') + '/gateway';
+      this.ws = new WebSocket(gatewayUrl);
+      
+      this.ws.onopen = () => {
+        console.log('Connected to Spacebar gateway');
+        this.identify();
+      };
 
-      // Login to Spacebar/Discord gateway
-      await this.client.login(token);
-      console.log('✅ Login successful');
-      return { token };
+      this.ws.onmessage = (event) => {
+        this.handleMessage(JSON.parse(event.data));
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('Spacebar WebSocket error:', error);
+      };
+
+      this.ws.onclose = () => {
+        console.log('Disconnected from Spacebar gateway');
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+        }
+      };
+
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Login timeout'));
+        }, 10000);
+
+        this.on('ready', () => {
+          clearTimeout(timeout);
+          resolve({ token });
+        });
+      });
     } catch (error) {
-      console.error('❌ Login failed:', error);
+      console.error('Failed to login to Spacebar:', error);
       throw error;
     }
   }
 
-  async register(credentials: { email: string; password: string; username: string }) {
-    console.log('=== SPACEBAR REGISTER ===');
-    console.log('Email:', credentials.email);
-    console.log('Username:', credentials.username);
-
-    try {
-      // For Spacebar registration, we need to make a direct API call
-      if (!this.rest) {
-        this.rest = new REST({ version: '10' });
-        if (this.config.endpoint !== 'https://discord.com/api') {
-          // @ts-ignore - Private property override for Spacebar
-          this.rest.options.api = this.config.endpoint;
-        }
+  private identify() {
+    if (!this.ws || !this.token) return;
+    
+    const identifyPayload = {
+      op: 2,
+      d: {
+        token: this.token,
+        properties: {
+          os: 'browser',
+          browser: 'spacebar-client',
+          device: 'spacebar-client'
+        },
+        intents: 513 // GUILDS + GUILD_VOICE_STATES
       }
+    };
+    
+    this.ws.send(JSON.stringify(identifyPayload));
+  }
 
-      const response = await fetch(`${this.config.endpoint}/auth/register`, {
+  private handleMessage(data: any) {
+    const { op, d, s, t } = data;
+    
+    if (s) {
+      this.sequenceNumber = s;
+    }
+
+    switch (op) {
+      case 10: // Hello
+        this.startHeartbeat(d.heartbeat_interval);
+        break;
+      case 0: // Dispatch
+        this.handleDispatch(t, d);
+        break;
+      case 1: // Heartbeat
+        this.sendHeartbeat();
+        break;
+      case 11: // Heartbeat ACK
+        console.log('Heartbeat acknowledged');
+        break;
+    }
+  }
+
+  private handleDispatch(type: string, data: any) {
+    switch (type) {
+      case 'READY':
+        this.sessionId = data.session_id;
+        this.user = data.user;
+        this.guilds = data.guilds || [];
+        this.emit('ready');
+        break;
+      case 'GUILD_CREATE':
+        this.guilds.push(data);
+        this.emit('guildCreate', data);
+        break;
+      case 'MESSAGE_CREATE':
+        this.emit('messageCreate', data);
+        break;
+      case 'VOICE_STATE_UPDATE':
+        this.emit('voiceStateUpdate', data);
+        break;
+    }
+  }
+
+  private startHeartbeat(interval: number) {
+    this.heartbeatInterval = setInterval(() => {
+      this.sendHeartbeat();
+    }, interval);
+  }
+
+  private sendHeartbeat() {
+    if (!this.ws) return;
+    
+    const heartbeatPayload = {
+      op: 1,
+      d: this.sequenceNumber
+    };
+    
+    this.ws.send(JSON.stringify(heartbeatPayload));
+  }
+
+  async register(credentials: { email: string; password: string; username: string }): Promise<any> {
+    try {
+      const response = await fetch(`${this.config.endpoint}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: credentials.email,
-          password: credentials.password,
-          username: credentials.username,
-          consent: true,
-          date_of_birth: '2000-01-01' // Required by some Spacebar instances
-        })
+        body: JSON.stringify(credentials),
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Registration failed: ${error}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Registration failed');
       }
 
-      const result = await response.json();
-      console.log('✅ Registration successful');
-      return result;
+      const data = await response.json();
+      console.log('Successfully registered to Spacebar');
+      return data;
     } catch (error) {
-      console.error('❌ Registration failed:', error);
+      console.error('Failed to register to Spacebar:', error);
       throw error;
     }
   }
 
-  getClient() {
-    if (!this.client) {
-      throw new Error('Client not initialized. Call initialize() first.');
-    }
-    return this.client;
+  getUser(): User | null {
+    return this.user;
   }
 
-  getRest() {
-    if (!this.rest) {
-      throw new Error('REST client not initialized. Login first.');
-    }
-    return this.rest;
+  getGuilds(): Guild[] {
+    return this.guilds;
   }
 
-  async disconnect() {
-    if (this.client) {
-      console.log('=== DISCONNECTING SPACEBAR CLIENT ===');
-      this.client.destroy();
-      this.client = null;
-      this.rest = null;
+  async disconnect(): Promise<void> {
+    try {
+      if (this.ws) {
+        this.ws.close();
+        this.ws = null;
+      }
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
       this.token = null;
+      this.sessionId = null;
+      this.user = null;
+      this.guilds = [];
+      console.log('Spacebar client disconnected');
+    } catch (error) {
+      console.error('Error disconnecting Spacebar client:', error);
     }
   }
 }
 
 // Default configuration - you'll need to update this with your Spacebar server URL
 const DEFAULT_CONFIG: SpacebarConfig = {
-  endpoint: process.env.SPACEBAR_ENDPOINT || 'https://api.spacebar.chat' // Update this to your server
+  endpoint: 'https://api.spacebar.chat' // Update this to your server
 };
 
 export const spacebarClient = new SpacebarClient(DEFAULT_CONFIG);
